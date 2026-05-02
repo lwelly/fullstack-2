@@ -20,45 +20,50 @@ class ReclamationController extends Controller
     ) {}
 
     // GET /api/v1/admin/reclamations
-    public function index(Request $request): JsonResponse
-    {
-        $query = Reclamation::with([
-            'student', 'module', 'semestre', 'attachments'
-        ]);
+   public function index(Request $request): JsonResponse
+{
+    $query = Reclamation::with([
+        'student.filiere', 'student.niveau', 'module', 'semestre', 'attachments'
+    ])->whereNull('deleted_at');
 
-        // Filtres
-        if ($request->has('status')) {
-            $query->where('status', $request->query('status'));
-        }
-        if ($request->has('type')) {
-            $query->where('type', $request->query('type'));
-        }
-        if ($request->has('semestre_id')) {
-            $query->where('semestre_id', $request->query('semestre_id'));
-        }
-        if ($request->has('search')) {
-            $search = $request->query('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('reference_number', 'like', "%{$search}%")
-                  ->orWhereHas('student', fn($sq) =>
-                      $sq->where('nom', 'like', "%{$search}%")
-                         ->orWhere('matricule', 'like', "%{$search}%")
-                  );
-            });
-        }
-
-        $reclamations = $query->orderByDesc('created_at')->paginate(15);
-
-        return response()->json([
-            'success' => true,
-            'data'    => ReclamationResource::collection($reclamations->items()),
-            'meta'    => [
-                'total'        => $reclamations->total(),
-                'current_page' => $reclamations->currentPage(),
-                'last_page'    => $reclamations->lastPage(),
-            ],
-        ]);
+    if ($request->filled('status'))     $query->where('status', $request->status);
+    if ($request->filled('type'))       $query->where('type', $request->type);
+    if ($request->filled('semestre_id')) $query->where('semestre_id', $request->semestre_id);
+    if ($request->filled('search')) {
+        $s = $request->search;
+        $query->where(function ($q) use ($s) {
+            $q->where('reference_number', 'like', "%{$s}%")
+              ->orWhereHas('student', fn($sq) =>
+                  $sq->where('nom', 'like', "%{$s}%")
+                     ->orWhere('prenom', 'like', "%{$s}%")
+                     ->orWhere('matricule', 'like', "%{$s}%")
+              );
+        });
     }
+
+    $reclamations = $query->orderByDesc('created_at')->paginate(
+        $request->input('per_page', 15)
+    );
+
+    try {
+        $data = ReclamationResource::collection($reclamations->items());
+    } catch (\Exception $e) {
+        \Log::error('[AdminReclamation@index] Resource error: ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+    }
+
+    return response()->json([
+        'success' => true,
+        'data'    => $data,
+        'meta'    => [
+            'total'        => $reclamations->total(),
+            'current_page' => $reclamations->currentPage(),
+            'last_page'    => $reclamations->lastPage(),
+            'per_page'     => $reclamations->perPage(),
+        ],
+    ]);
+}
+
 
     // GET /api/v1/admin/reclamations/{id}
     public function show(int $id): JsonResponse

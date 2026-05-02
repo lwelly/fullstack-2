@@ -182,30 +182,34 @@ class Reclamation extends Model
     /**
      * Change le statut et enregistre dans l'historique
      */
-    public function changeStatus(
-        string $newStatus,
-        User   $changedBy,
-        ?string $comment = null,
-        ?string $ip = null
-    ): void {
-        $oldStatus = $this->status;
+   /**
+ * Change le statut et enregistre dans l'historique
+ */
+public function changeStatus(
+    string $newStatus,
+    User   $changedBy,
+    ?string $comment = null,
+    ?string $ip = null
+): void {
+    $oldStatus = $this->status;
 
-        $this->update([
-            'status'       => $newStatus,
-            'resolved_at'  => in_array($newStatus, [
-                self::STATUS_RESOLVED,
-                self::STATUS_REJECTED,
-            ]) ? now() : $this->resolved_at,
-        ]);
+    $this->update([
+        'status'      => $newStatus,
+        'resolved_at' => in_array($newStatus, [
+            self::STATUS_RESOLVED,
+            self::STATUS_REJECTED,
+        ]) ? now() : $this->resolved_at,
+    ]);
 
-        ReclamationHistory::create([
-            'reclamation_id' => $this->id,
-            'changed_by'     => $changedBy->id,
-            'old_status'     => $oldStatus,
-            'new_status'     => $newStatus,
-            'comment'        => $comment,
-            'ip_address'     => $ip,
-            'changed_at'     => now(),
-        ]);
-    }
+    ReclamationHistory::create([
+        'reclamation_id' => $this->id,
+        'changed_by'     => $changedBy->id,   // ✅ $changedBy est un User valide
+        'old_status'     => $oldStatus,
+        'new_status'     => $newStatus,
+        'comment'        => $comment,
+        'ip_address'     => $ip,
+        'created_at'     => now(),             // ✅ corrigé : plus 'changed_at'
+    ]);
+}
+
 }
