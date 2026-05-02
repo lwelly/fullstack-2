@@ -110,8 +110,8 @@ class AuthService
         }
 
         // Récupérer filière et niveau via les codes
-        $filiere = DB::table('filieres')->where('code', $preloaded->filiere_code)->first();
-        $niveau  = DB::table('niveaux')->where('code', $preloaded->niveau_code)->first();
+        $filiere = DB::table('filieres')->where('id', $preloaded->filiere_id)->first();
+        $niveau  = DB::table('niveaux')->where('id', $preloaded->niveau_id)->first();
 
         return [
             'success' => true,
@@ -121,9 +121,9 @@ class AuthService
                 'name'         => $preloaded->prenom . ' ' . $preloaded->nom,
                 'masked_email' => $this->maskEmail($email),
                 'filiere'      => $filiere?->name,
-                'filiere_code' => $preloaded->filiere_code,
+                'filiere_code' => $filiere?->code ?? 'N/A',
                 'niveau'       => $niveau?->label,
-                'niveau_code'  => $preloaded->niveau_code,
+                'niveau_code'  => $niveau?->code  ?? 'N/A',
             ],
         ];
     }
@@ -191,8 +191,8 @@ class AuthService
         }
 
         // Récupérer filière et niveau via les codes
-        $filiere = DB::table('filieres')->where('code', $preloaded->filiere_code)->first();
-        $niveau  = DB::table('niveaux')->where('code', $preloaded->niveau_code)->first();
+        $filiere = DB::table('filieres')->where('id', $preloaded->filiere_id)->first();
+        $niveau  = DB::table('niveaux')->where('id', $preloaded->niveau_id)->first();
 
         if (!$filiere || !$niveau) {
             return ['success' => false, 'message' => 'Filière ou niveau introuvable. Contactez l\'administration.'];

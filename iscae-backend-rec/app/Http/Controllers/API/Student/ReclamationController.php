@@ -100,17 +100,17 @@ class ReclamationController extends Controller
             return response()->json(['message' => 'Réclamation introuvable.'], 404);
         }
 
-        // Historique — utilise changed_at (pas created_at)
+        // Historique — utilise created_at (pas created_at)
         $history = DB::table('reclamation_history')
             ->where('reclamation_id', $id)
-            ->orderBy('changed_at', 'asc')
+            ->orderBy('created_at', 'asc')
             ->get()
             ->map(fn($h) => [
                 'id'              => $h->id,
                 'old_status'      => $h->old_status,
                 'new_status'      => $h->new_status,
                 'comment'         => $h->comment,
-                'created_at'      => $h->changed_at,  // alias changed_at → created_at
+                'created_at'      => $h->created_at,  // alias created_at → created_at
                 'changed_by_name' => 'Administration',
             ]);
 
@@ -247,7 +247,7 @@ class ReclamationController extends Controller
                 'updated_at'       => now(),
             ]);
 
-            // Historique — changed_at
+            // Historique — created_at
             DB::table('reclamation_history')->insert([
                 'reclamation_id' => $id,
                 'old_status'     => null,
@@ -255,7 +255,7 @@ class ReclamationController extends Controller
                 'comment'        => 'Réclamation soumise par l\'étudiant.',
                 'changed_by'     => $user->id,
                 'ip_address'     => request()->ip(),
-                'changed_at'     => now(),
+                'created_at' => now(),
             ]);
 
             if ($request->hasFile('document') && $request->file('document')->isValid()) {
