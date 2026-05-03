@@ -1,15 +1,18 @@
 <?php
-// app/Models/Notification.php
 
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Notification extends Model
 {
-    use HasUuids;
+    use HasUuids, SoftDeletes;
+
+    // ── La table n'a pas de colonne updated_at ──────────────────────
+    const UPDATED_AT = null;
 
     protected $fillable = [
         'user_id',
@@ -20,6 +23,7 @@ class Notification extends Model
         'channel',
         'is_read',
         'read_at',
+        'sent_at',
         'notifiable_type',
         'notifiable_id',
         'sent_by',
@@ -28,15 +32,12 @@ class Notification extends Model
     protected function casts(): array
     {
         return [
-            'data'     => 'array',
-            'is_read'  => 'boolean',
-            'read_at'  => 'datetime',
+            'data'    => 'array',
+            'is_read' => 'boolean',
+            'read_at' => 'datetime',
+            'sent_at' => 'datetime',
         ];
     }
-
-    // ==========================================
-    // Relations
-    // ==========================================
 
     public function user(): BelongsTo
     {
@@ -48,10 +49,6 @@ class Notification extends Model
         return $this->belongsTo(User::class, 'sent_by');
     }
 
-    // ==========================================
-    // Scopes
-    // ==========================================
-
     public function scopeUnread($query)
     {
         return $query->where('is_read', false);
@@ -62,17 +59,10 @@ class Notification extends Model
         return $query->where('user_id', $userId);
     }
 
-    // ==========================================
-    // Helpers
-    // ==========================================
-
     public function markAsRead(): void
     {
-        if (!$this->is_read) {
-            $this->update([
-                'is_read' => true,
-                'read_at' => now(),
-            ]);
+        if (! $this->is_read) {
+            $this->update(['is_read' => true, 'read_at' => now()]);
         }
     }
 }

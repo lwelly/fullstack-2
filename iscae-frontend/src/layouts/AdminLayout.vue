@@ -17,6 +17,7 @@
       <!-- ── Logo ── -->
       <div class="drawer-logo" :class="{ 'logo-collapsed': rail && !mobile }">
         <div class="logo-icon-wrap">
+
           <v-icon size="20" color="white">mdi-shield-account</v-icon>
         </div>
         <transition name="logo-slide">
@@ -341,10 +342,10 @@ async function fetchNotifCount() {
 
 /* ── Logout ── */
 async function logout() {
-  try { await api.post('/auth/logout') } catch {}
-  auth.clear?.()
+  await auth.logout()     // ✅ appelle la méthode du store qui nettoie token + user
   router.push('/login')
 }
+
 
 /* ── Lifecycle ── */
 onMounted(() => {

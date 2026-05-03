@@ -1,5 +1,4 @@
 <?php
-// app/Providers/AppServiceProvider.php
 
 namespace App\Providers;
 
@@ -7,17 +6,22 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+
+// Services
 use App\Services\OtpService;
 use App\Services\AuditService;
 use App\Services\NotificationService;
 use App\Services\AuthService;
 use App\Services\ReclamationService;
 
+// Observer
+use App\Models\Reclamation;
+use App\Observers\ReclamationObserver;
+
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // Singletons Services
         $this->app->singleton(OtpService::class);
         $this->app->singleton(AuditService::class);
         $this->app->singleton(NotificationService::class);
@@ -40,47 +44,40 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // ================================================
-        // RATE LIMITERS
-        // ================================================
+        // ── Observer Réclamations ──────────────────────────────────────
+        // Déclenche NotificationService automatiquement à chaque update
+        Reclamation::observe(ReclamationObserver::class);
 
-        // Rate limiter global API — 60 requêtes/minute
+        // ── Rate Limiters ─────────────────────────────────────────────
+
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(60)
-                        ->by($request->user()?->id ?: $request->ip())
-                        ->response(function () {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'Trop de requêtes. Veuillez réessayer dans 1 minute.',
-                                'code'    => 'RATE_LIMIT_EXCEEDED',
-                            ], 429);
-                        });
+                ->by($request->user()?->id ?: $request->ip())
+                ->response(fn() => response()->json([
+                    'success' => false,
+                    'message' => 'Trop de requêtes. Veuillez réessayer dans 1 minute.',
+                    'code'    => 'RATE_LIMIT_EXCEEDED',
+                ], 429));
         });
 
-        // Rate limiter strict login — 10 requêtes/minute
         RateLimiter::for('login', function (Request $request) {
             return Limit::perMinute(10)
-                        ->by($request->ip())
-                        ->response(function () {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'Trop de tentatives de connexion. Réessayez dans 1 minute.',
-                                'code'    => 'LOGIN_RATE_LIMIT',
-                            ], 429);
-                        });
+                ->by($request->ip())
+                ->response(fn() => response()->json([
+                    'success' => false,
+                    'message' => 'Trop de tentatives de connexion. Réessayez dans 1 minute.',
+                    'code'    => 'LOGIN_RATE_LIMIT',
+                ], 429));
         });
 
-        // Rate limiter OTP — 5 requêtes/minute
         RateLimiter::for('otp', function (Request $request) {
             return Limit::perMinute(5)
-                        ->by($request->ip())
-                        ->response(function () {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'Trop de demandes OTP. Réessayez dans 1 minute.',
-                                'code'    => 'OTP_RATE_LIMIT',
-                            ], 429);
-                        });
+                ->by($request->ip())
+                ->response(fn() => response()->json([
+                    'success' => false,
+                    'message' => 'Trop de demandes OTP. Réessayez dans 1 minute.',
+                    'code'    => 'OTP_RATE_LIMIT',
+                ], 429));
         });
     }
 }

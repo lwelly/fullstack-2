@@ -252,9 +252,13 @@ Route::prefix('v1')->group(function () {
         Route::put ('reclamations/{id}', [StudentReclamation::class, 'update'])->name('reclamations.update');
 
         // ── Notifications ──────────────────────────────────
-        Route::get('notifications',           [StudentNotification::class, 'index']      )->name('notifications.index');
-        Route::put('notifications/{id}/read', [StudentNotification::class, 'markAsRead'] )->name('notifications.read');
-        Route::put('notifications/read-all',  [StudentNotification::class, 'markAllRead'])->name('notifications.read-all');
+        // ── Notifications ──────────────────────────────────
+        Route::get ('notifications',           [StudentNotification::class, 'index']      )->name('notifications.index');
+        Route::get ('notifications/counts',    [StudentNotification::class, 'counts']     )->name('notifications.counts');
+        Route::put ('notifications/read-all',  [StudentNotification::class, 'markAllRead'])->name('notifications.read-all'); // ← AVANT {id}
+        Route::put ('notifications/{id}/read', [StudentNotification::class, 'markAsRead'] )->name('notifications.read');
+        Route::delete('notifications/{id}',    [StudentNotification::class, 'destroy']    )->name('notifications.destroy');
+
 
         // ── Profil ─────────────────────────────────────────
         Route::get ('profile',          [StudentProfile::class, 'show']          )->name('profile.show');

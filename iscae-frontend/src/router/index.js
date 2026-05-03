@@ -31,16 +31,31 @@ const StudentNotifications     = () => import('@/views/student/NotificationsView
 const routes = [
   { path: '/', redirect: '/login' },
 
-  // Auth
-  { path: '/login',    name: 'login',    component: LoginView,     meta: { guest: true } },
-  { path: '/register', name: 'register', component: RegisterView,  meta: { guest: true } },
-  { path: '/2fa',      name: '2fa',      component: TwoFactorView, meta: { guest: false, requiresAuth: false } },
-
-  // Admin
+  // ── Auth ────────────────────────────────────────────────────────────
   {
-    path: '/admin',
+    path:      '/login',
+    name:      'login',
+    component: LoginView,
+    meta:      { guest: true },
+  },
+  {
+    path:      '/register',
+    name:      'register',
+    component: RegisterView,
+    meta:      { guest: true },
+  },
+  {
+    path:      '/2fa',
+    name:      'verify-2fa',   // ✅ harmonisé avec LoginView.vue
+    component: TwoFactorView,
+    meta:      { guest: false, requiresAuth: false },
+  },
+
+  // ── Admin ────────────────────────────────────────────────────────────
+  {
+    path:      '/admin',
     component: AdminLayout,
-    meta: { requiresAuth: true, role: 'admin' },
+    meta:      { requiresAuth: true, role: 'admin' },
     children: [
       { path: '',                  redirect: '/admin/dashboard' },
       { path: 'dashboard',         name: 'admin.dashboard',          component: AdminDashboard },
@@ -53,11 +68,11 @@ const routes = [
     ],
   },
 
-  // Student
+  // ── Student ──────────────────────────────────────────────────────────
   {
-    path: '/student',
+    path:      '/student',
     component: StudentLayout,
-    meta: { requiresAuth: true, role: 'student' },
+    meta:      { requiresAuth: true, role: 'student' },
     children: [
       { path: '',                  redirect: '/student/dashboard' },
       { path: 'dashboard',         name: 'student.dashboard',          component: StudentDashboard },
@@ -69,7 +84,7 @@ const routes = [
     ],
   },
 
-  // 404
+  // ── 404 ──────────────────────────────────────────────────────────────
   { path: '/:pathMatch(.*)*', redirect: '/login' },
 ]
 
@@ -82,10 +97,11 @@ const router = createRouter({
   },
 })
 
-// ── Guard ─────────────────────────────────────────────────────────────────
+// ── Navigation Guard ──────────────────────────────────────────────────────
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
+  // Init une seule fois
   if (!auth.initialized) {
     await auth.init()
   }
@@ -93,22 +109,38 @@ router.beforeEach(async (to) => {
   const isAuth = auth.isAuthenticated
   const role   = auth.user?.role
 
+  // ── Route protégée ──
   if (to.meta.requiresAuth) {
-    if (!isAuth) return '/login'
+    if (!isAuth) return { name: 'login' }
     if (to.meta.role && to.meta.role !== role) {
-      return role === 'admin' ? '/admin/dashboard' : '/student/dashboard'
+      return role === 'admin'
+        ? { name: 'admin.dashboard' }
+        : { name: 'student.dashboard' }
     }
     return true
   }
 
+  // ── Route guest — redirige si déjà connecté ──
   if (to.meta.guest && isAuth) {
-    return role === 'admin' ? '/admin/dashboard' : '/student/dashboard'
+    return role === 'admin'
+      ? { name: 'admin.dashboard' }
+      : { name: 'student.dashboard' }
   }
 
-  if (to.name === '2fa') {
-    const has2fa = !!sessionStorage.getItem('2fa_user_id')
-    if (!has2fa && !isAuth) return '/login'
-    if (isAuth) return role === 'admin' ? '/admin/dashboard' : '/student/dashboard'
+  // ── Page 2FA — vérifier que la session OTP existe ──
+  if (to.name === 'verify-2fa') {
+    const hasQueryId     = !!to.query.user_id
+    const hasSessionId   = !!sessionStorage.getItem('2fa_user_id')
+    const has2fa         = hasQueryId || hasSessionId
+
+    // Déjà connecté → dashboard
+    if (isAuth) {
+      return role === 'admin'
+        ? { name: 'admin.dashboard' }
+        : { name: 'student.dashboard' }
+    }
+    // Pas de session OTP → login
+    if (!has2fa) return { name: 'login' }
   }
 
   return true

@@ -1,261 +1,168 @@
 <?php
+// app/Http/Controllers/API/Auth/AuthController.php
 
 namespace App\Http\Controllers\API\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\LoginRequest;
-use App\Http\Requests\Auth\VerifyPreloadedRequest;
-use App\Http\Requests\Auth\VerifyOtpRequest;
-use App\Http\Requests\Auth\SetPasswordRequest;
-use App\Http\Requests\Auth\Verify2FARequest;
-use App\Services\AuthService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
 
 class AuthController extends Controller
 {
-    public function __construct(
-        private AuthService $authService
-    ) {}
-
-    // ══════════════════════════════════════════
-    // POST /api/v1/auth/login
-    // ══════════════════════════════════════════
-    public function login(LoginRequest $request): JsonResponse
-{
-    $result = $this->authService->login(
-        $request->input('login'),
-        $request->input('password'),
-        $request->ip() ?? '127.0.0.1',
-        $request->userAgent() ?? 'unknown',
-        $request->input('device_fingerprint') // ✅ nouveau
-    );
-
-    if (!$result['success']) {
-        return response()->json(['success' => false, 'message' => $result['message']], 401);
-    }
-
-    return response()->json([
-        'success' => true,
-        'message' => $result['message'],
-        'data'    => $result['data'],
-    ]);
-}
-
-
-    // ══════════════════════════════════════════
-    // POST /api/v1/auth/register/verify
-    // ══════════════════════════════════════════
-    public function verifyPreloaded(VerifyPreloadedRequest $request): JsonResponse
-    {
-        $result = $this->authService->verifyPreloaded(
-            $request->input('matricule'),
-            $request->input('email')
-        );
-
-        if (!$result['success']) {
-            return response()->json([
-                'success' => false,
-                'message' => $result['message'],
-            ], 422);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => $result['message'],
-            'data'    => $result['data'],
-        ], 200);
-    }
-
-    // ══════════════════════════════════════════
-    // POST /api/v1/auth/register/send-otp
-    // ══════════════════════════════════════════
-    public function sendRegistrationOtp(Request $request): JsonResponse
+    // ── POST /auth/login ───────────────────────────────────────────────
+    public function login(Request $request)
     {
         $request->validate([
-            'preloaded_id' => ['required', 'integer', 'exists:students_preloaded,id'],
+            'login'    => 'required|string|max:255',
+            'password' => 'required|string',
         ]);
 
-        $result = $this->authService->sendRegistrationOtp(
-            (int) $request->input('preloaded_id')
-        );
+        $loginValue = trim($request->input('login'));
 
-        return response()->json([
-            'success' => true,
-            'message' => $result['message'],
-            'data'    => ['preloaded_id' => $request->input('preloaded_id')],
-        ]);
-    }
+        // ── Chercher par login_identifier OU email ─────────────────────
+        $user = User::where('login_identifier', $loginValue)
+                    ->orWhere('email', $loginValue)
+                    ->first();
 
-    // ══════════════════════════════════════════
-    // POST /api/v1/auth/register/verify-otp
-    // ══════════════════════════════════════════
-    public function verifyRegistrationOtp(VerifyOtpRequest $request): JsonResponse
-    {
-        $result = $this->authService->verifyRegistrationOtp(
-            (int) $request->input('preloaded_id'),
-            $request->input('otp_code')
-        );
-
-        if (!$result['success']) {
+        // ── Utilisateur introuvable ────────────────────────────────────
+        if (! $user) {
             return response()->json([
-                'success' => false,
-                'message' => $result['message'],
-            ], 422);
+                'message' => 'Identifiants incorrects.',
+            ], 401);
         }
 
+        // ── Mot de passe incorrect ─────────────────────────────────────
+        if (! Hash::check($request->input('password'), $user->password)) {
+            // Incrémenter le compteur d'échecs si la colonne existe
+            if (isset($user->failed_login_count)) {
+                $user->increment('failed_login_count');
+            }
+            return response()->json([
+                'message' => 'Identifiants incorrects.',
+            ], 401);
+        }
+
+        // ── Compte verrouillé ──────────────────────────────────────────
+        if (! empty($user->locked_until) && now()->lt($user->locked_until)) {
+            return response()->json([
+                'message' => 'Compte temporairement verrouillé. Réessayez plus tard.',
+            ], 423);
+        }
+
+        // ── Compte inactif ─────────────────────────────────────────────
+        if (isset($user->is_active) && ! $user->is_active) {
+            return response()->json([
+                'message' => 'Compte désactivé. Contactez l\'administrateur.',
+            ], 403);
+        }
+
+        // ── 2FA activé ─────────────────────────────────────────────────
+        if (! empty($user->two_factor_enabled)) {
+            return response()->json([
+                'requires_2fa' => true,
+                'user_id'      => $user->id,
+                'login_type'   => $user->role,
+            ], 200);
+        }
+
+        // ── Réinitialiser le compteur d'échecs ─────────────────────────
+        $updateData = ['last_login_at' => now()];
+        if (isset($user->failed_login_count)) {
+            $updateData['failed_login_count'] = 0;
+        }
+        $user->update($updateData);
+
+        // ── Générer token Sanctum ──────────────────────────────────────
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        // ── Construire la réponse user ─────────────────────────────────
+        $userData = $this->buildUserPayload($user);
+
         return response()->json([
-            'success' => true,
-            'message' => 'OTP vérifié avec succès.',
-            'data'    => $result['data'],
+            'message' => 'Connexion réussie.',
+            'token'   => $token,
+            'user'    => $userData,
         ], 200);
     }
 
-    // ══════════════════════════════════════════
-    // POST /api/v1/auth/register/set-password
-    // ══════════════════════════════════════════
-    public function setPassword(SetPasswordRequest $request): JsonResponse
+    // ── GET /auth/me ───────────────────────────────────────────────────
+    public function me(Request $request)
     {
-        $result = $this->authService->setPassword(
-            $request->input('registration_token'),
-            $request->input('password'),
-            $request->ip(),
-            $request->userAgent()
-        );
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['message' => 'Non authentifié.'], 401);
+        }
+        return response()->json($this->buildUserPayload($user));
+    }
 
-        if (!$result['success']) {
-            return response()->json([
-                'success' => false,
-                'message' => $result['message'],
-            ], 422);
+    // ── POST /auth/logout ──────────────────────────────────────────────
+    public function logout(Request $request)
+    {
+        $request->user()?->currentAccessToken()?->delete();
+        return response()->json(['message' => 'Déconnexion réussie.']);
+    }
+
+    // ── POST /auth/2fa/verify ──────────────────────────────────────────
+    public function verify2FA(Request $request)
+    {
+        $request->validate([
+            'user_id'    => 'required|integer',
+            'otp_code'   => 'required|string',
+            'login_type' => 'nullable|string',
+        ]);
+
+        $user = User::find($request->user_id);
+
+        if (! $user) {
+            return response()->json(['message' => 'Utilisateur introuvable.'], 404);
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Compte créé avec succès. Bienvenue à l\'ISCAE !',
-            'data'    => $result['data'],
-        ], 201);
-    }
-
-    // ══════════════════════════════════════════
-    // POST /api/v1/auth/2fa/verify
-    // ══════════════════════════════════════════
-   public function verify2FA(Verify2FARequest $request): JsonResponse
-{
-    $result = $this->authService->verify2FA(
-        (int) $request->input('user_id'),
-        $request->input('otp_code'),
-        $request->input('login_type') ?? 'student',
-        $request->ip() ?? '127.0.0.1',
-        $request->userAgent() ?? 'unknown',
-        $request->input('device_fingerprint'), // ✅ nouveau
-        (bool) $request->input('trust_device', true) // ✅ toujours faire confiance
-    );
-
-    if (!$result['success']) {
-        return response()->json(['success' => false, 'message' => $result['message']], 422);
-    }
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Authentification réussie.',
-        'data'    => $result['data'],
-    ]);
-}
-
-
-    // ══════════════════════════════════════════
-    // POST /api/v1/auth/logout
-    // ══════════════════════════════════════════
-    public function logout(Request $request): JsonResponse
-    {
-        $this->authService->logout($request->user());
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Déconnexion réussie.',
-        ]);
-    }
-
-    // ══════════════════════════════════════════
-    // GET /api/v1/auth/me
-    // ══════════════════════════════════════════
-    public function me(Request $request): JsonResponse
-    {
-        $user = $request->user()->load([
-            'student.filiere',
-            'student.niveau',
-            'admin.department',
-        ]);
-
-        if ($user->isStudent()) {
-            $profile = [
-                'matricule'     => $user->student?->matricule,
-                'full_name'     => $user->student?->full_name,
-                'filiere'       => $user->student?->filiere?->code,
-                'filiere_nom'   => $user->student?->filiere?->name,
-                'niveau'        => $user->student?->niveau?->code,
-                'photo_url'     => $user->student?->photo_url,
-                'academic_year' => $user->student?->academic_year,
-            ];
-        } else {
-            $profile = [
-                'full_name'  => $user->admin?->full_name,
-                'role_label' => $user->admin?->role_label_readable,
-                'department' => $user->admin?->department?->code,
-            ];
+        // Vérification OTP (adapter selon votre implémentation 2FA)
+        $valid = $user->two_factor_secret === $request->otp_code; // Exemple basique
+        if (! $valid) {
+            return response()->json(['message' => 'Code OTP invalide.'], 401);
         }
 
+        $token = $user->createToken('auth_token')->plainTextToken;
+        $user->update(['last_login_at' => now()]);
+
         return response()->json([
-            'success' => true,
-            'data'    => [
-                'id'         => $user->id,
-                'name'       => $user->name,
-                'email'      => $user->email,
-                'role'       => $user->role,
-                'status'     => $user->status,
-                'profile'    => $profile,
-                'last_login' => $user->last_login_at?->format('Y-m-d H:i'),
-            ],
+            'message' => 'Authentification 2FA réussie.',
+            'token'   => $token,
+            'user'    => $this->buildUserPayload($user),
         ]);
     }
-    // ══════════════════════════════════════════
-// POST /api/v1/auth/2fa/resend
-// ══════════════════════════════════════════
-public function resendOtp(Request $request): JsonResponse
-{
-    $request->validate([
-        'user_id'    => 'required|integer|exists:users,id',
-        'login_type' => 'nullable|string|in:student,admin',
-    ]);
 
-    $result = $this->authService->resendOtp(
-        (int) $request->input('user_id'),
-        $request->input('login_type', 'student')
-    );
+    // ── Helper : construire le payload user ───────────────────────────
+    private function buildUserPayload(User $user): array
+    {
+        // Récupérer les données student si role = student
+        $studentData = null;
+        if ($user->role === 'student') {
+            $student = \App\Models\Student::where('user_id', $user->id)->first();
+            if ($student) {
+                $studentData = [
+                    'id'            => $student->id,
+                    'matricule'     => $student->matricule,
+                    'nom'           => $student->nom,
+                    'prenom'        => $student->prenom,
+                    'filiere_id'    => $student->filiere_id,
+                    'niveau_id'     => $student->niveau_id,
+                    'academic_year' => $student->academic_year,
+                    'photo_path'    => $student->photo_path,
+                ];
+            }
+        }
 
-    return response()->json([
-        'success' => true,
-        'message' => $result['message'] ?? 'Code OTP renvoyé.',
-        // En dev uniquement
-        'otp_dev' => app()->isLocal() ? ($result['otp_dev'] ?? null) : null,
-    ]);
-}
-
-// ══════════════════════════════════════════
-// POST /api/v1/auth/forgot-password
-// ══════════════════════════════════════════
-public function forgotPassword(Request $request): JsonResponse
-{
-    $request->validate([
-        'email' => 'required|email|exists:users,email',
-    ]);
-
-    // TODO: implémenter l'envoi d'email de réinitialisation
-    return response()->json([
-        'success' => true,
-        'message' => 'Un lien de réinitialisation a été envoyé à votre adresse e-mail.',
-    ]);
-}
-
+        return array_filter([
+            'id'               => $user->id,
+            'email'            => $user->email,
+            'login_identifier' => $user->login_identifier,
+            'role'             => $user->role,
+            'is_active'        => $user->is_active ?? true,
+            'last_login_at'    => $user->last_login_at,
+            'student'          => $studentData,
+        ], fn($v) => $v !== null);
     }
+}
