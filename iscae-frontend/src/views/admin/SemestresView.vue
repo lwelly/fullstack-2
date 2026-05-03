@@ -1,238 +1,174 @@
 <template>
-  <v-container fluid class="pa-6">
+  <div class="semestres-page">
 
-    <!-- En-tête -->
-    <div class="d-flex align-center justify-space-between mb-6">
+    <!-- ─── En-tête ─────────────────────────────────────────────── -->
+    <div class="page-header mb-6">
       <div>
-        <h1 class="text-h4 font-weight-bold">Gestion des Semestres</h1>
-        <p class="text-body-2 text-medium-emphasis mt-1">
-          Gérez les périodes de réclamations, examens et rattrapages
+        <h1 class="page-title">Semestres &amp; Périodes</h1>
+        <p class="page-sub">
+          Gérez les semestres, les périodes de réclamation, d'examen et de rattrapage.
         </p>
       </div>
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreateDialog">
-        Nouveau Semestre
+      <v-btn color="#0F2D5E" rounded="lg" prepend-icon="mdi-plus" @click="openCreateDialog">
+        Nouveau semestre
       </v-btn>
     </div>
 
-    <!-- Chargement -->
-    <div v-if="loading" class="text-center py-12">
-      <v-progress-circular indeterminate color="primary" size="60" />
+    <!-- ─── Chargement ───────────────────────────────────────────── -->
+    <div v-if="loading" class="loading-center">
+      <v-progress-circular indeterminate color="#0F2D5E" size="48" />
     </div>
 
-    <!-- Grille des semestres -->
-    <v-row v-else>
-      <v-col v-for="s in semestres" :key="s.id" cols="12" md="6" xl="4">
-        <v-card
-          rounded="xl"
-          elevation="2"
-          class="semestre-card h-100"
-          :style="{ borderTop: `4px solid ${s.is_open ? '#4caf50' : '#f44336'}` }"
-        >
-          <!-- En-tête carte -->
-          <v-card-title class="d-flex align-center justify-space-between pt-4 px-5">
-            <div class="d-flex align-center gap-2">
-              <v-avatar :color="s.is_open ? 'success' : 'error'" size="36">
-                <v-icon color="white" size="20">
-                  {{ s.is_open ? 'mdi-lock-open' : 'mdi-lock' }}
-                </v-icon>
-              </v-avatar>
-              <span class="text-h6 font-weight-bold">{{ s.code }}</span>
-            </div>
-            <div class="d-flex align-center gap-2">
-              <v-chip
-                :color="s.is_open ? 'success' : 'error'"
-                size="small"
-                variant="flat"
-              >
-                {{ s.is_open ? 'Ouvert' : 'Fermé' }}
-              </v-chip>
-              <span class="text-caption text-medium-emphasis">{{ s.academic_year?.replace('-', ' ') }}</span>
-            </div>
-          </v-card-title>
+    <!-- ─── Vide ─────────────────────────────────────────────────── -->
+    <div v-else-if="!semestres.length" class="empty-state">
+      <v-icon size="64" color="#CBD5E1">mdi-calendar-blank</v-icon>
+      <p class="empty-title">Aucun semestre</p>
+      <p class="empty-sub">Créez votre premier semestre pour démarrer.</p>
+      <v-btn color="#0F2D5E" prepend-icon="mdi-plus" @click="openCreateDialog">
+        Créer un semestre
+      </v-btn>
+    </div>
 
-          <v-card-text class="px-5 pb-2">
+    <!-- ─── Grille de cartes ─────────────────────────────────────── -->
+    <div v-else class="cards-grid">
+      <div v-for="s in semestres" :key="s.id" class="sem-card">
 
-            <!-- Dates réclamations -->
-            <div class="info-row mb-1">
-              <v-icon size="14" class="mr-1" color="medium-emphasis">mdi-calendar-start</v-icon>
-              <span class="text-caption text-medium-emphasis">Début réclamations</span>
-              <span class="text-caption font-weight-medium ml-auto">{{ formatDate(s.open_at) }}</span>
-            </div>
-            <div class="info-row mb-3">
-              <v-icon size="14" class="mr-1" color="medium-emphasis">mdi-calendar-end</v-icon>
-              <span class="text-caption text-medium-emphasis">Fin réclamations</span>
-              <span class="text-caption font-weight-medium ml-auto">{{ formatDate(s.close_at) }}</span>
-            </div>
+        <!-- Header carte -->
+        <div class="card-top">
+          <div class="card-meta">
+            <span class="card-code">{{ s.code }}</span>
+            <span class="card-label">{{ s.label }}</span>
+            <span class="card-year">
+              <v-icon size="12" color="#94A3B8">mdi-calendar</v-icon>
+              {{ s.academic_year }}
+            </span>
+          </div>
+          <div class="card-chips">
+            <v-chip size="x-small" :color="s.is_open ? 'success' : 'error'" variant="flat">
+              {{ s.is_open ? 'Ouvert' : 'Fermé' }}
+            </v-chip>
+            <v-chip v-if="s.niveau" size="x-small" color="indigo" variant="tonal">
+              {{ s.niveau.label ?? s.niveau.code }}
+            </v-chip>
+          </div>
+        </div>
 
-            <!-- Barre de progression -->
-            <div class="mb-1 d-flex justify-space-between">
-              <span class="text-caption text-medium-emphasis">Progression</span>
-              <span class="text-caption font-weight-bold" :class="calcProgress(s) >= 100 ? 'text-error' : 'text-primary'">
-                {{ calcProgress(s) }}%
-              </span>
-            </div>
-            <v-progress-linear
-              :model-value="calcProgress(s)"
-              :color="calcProgress(s) >= 100 ? 'error' : 'primary'"
-              rounded
-              height="6"
-              class="mb-2"
-            />
-            <p class="text-caption text-medium-emphasis mb-3">
-              <template v-if="calcProgress(s) >= 100">⏱ Période terminée</template>
-              <template v-else-if="daysRemaining(s) > 0">⏳ {{ daysRemaining(s) }} jour(s) restant(s)</template>
-            </p>
+        <!-- Dates -->
+        <div class="card-dates">
+          <v-icon size="13" color="#6B7280">mdi-calendar-arrow-left</v-icon>
+          <span>{{ formatDate(s.open_at) }}</span>
+          <v-icon size="11" color="#D1D5DB">mdi-arrow-right-thin</v-icon>
+          <v-icon size="13" color="#6B7280">mdi-calendar-arrow-right</v-icon>
+          <span>{{ formatDate(s.close_at) }}</span>
+          <span v-if="daysRemaining(s.close_at) >= 0" class="days-badge">
+            {{ daysRemaining(s.close_at) }}j
+          </span>
+        </div>
 
-            <!-- Séparateur -->
-            <v-divider class="mb-3" />
+        <!-- Barre de progression -->
+        <v-progress-linear
+          :model-value="calcProgress(s)"
+          color="#0F2D5E"
+          height="5"
+          rounded
+          bg-color="#E2E8F0"
+          class="my-3"
+        />
 
-            <!-- Status Examens -->
-            <div class="period-block mb-2 pa-2 rounded-lg" :class="s.exam_is_open ? 'exam-open' : 'exam-closed'">
-              <div class="d-flex align-center justify-space-between">
-                <div class="d-flex align-center gap-2">
-                  <v-icon size="16" :color="s.exam_is_open ? 'warning' : 'grey'">mdi-file-document-edit</v-icon>
-                  <span class="text-caption font-weight-medium">Examens</span>
-                </div>
-                <v-chip :color="s.exam_is_open ? 'warning' : 'grey'" size="x-small" variant="flat">
-                  {{ s.exam_is_open ? 'Ouvert' : 'Fermé' }}
-                </v-chip>
-              </div>
-              <div v-if="s.exam_open_at || s.exam_close_at" class="text-caption text-medium-emphasis mt-1 ml-6">
-                <span v-if="s.exam_is_open && s.exam_open_at">Depuis : {{ formatDate(s.exam_open_at) }}</span>
-                <span v-else-if="s.exam_close_at">Fermé le : {{ formatDate(s.exam_close_at) }}</span>
-              </div>
-            </div>
-
-            <!-- Status Rattrapage -->
-            <div class="period-block pa-2 rounded-lg" :class="s.rattrapage_is_open ? 'rattr-open' : 'rattr-closed'">
-              <div class="d-flex align-center justify-space-between">
-                <div class="d-flex align-center gap-2">
-                  <v-icon size="16" :color="s.rattrapage_is_open ? 'deep-purple' : 'grey'">mdi-refresh-circle</v-icon>
-                  <span class="text-caption font-weight-medium">Rattrapage</span>
-                </div>
-                <v-chip :color="s.rattrapage_is_open ? 'deep-purple' : 'grey'" size="x-small" variant="flat">
-                  {{ s.rattrapage_is_open ? 'Ouvert' : 'Fermé' }}
-                </v-chip>
-              </div>
-              <div v-if="s.rattrapage_open_at || s.rattrapage_close_at" class="text-caption text-medium-emphasis mt-1 ml-6">
-                <span v-if="s.rattrapage_is_open && s.rattrapage_open_at">Depuis : {{ formatDate(s.rattrapage_open_at) }}</span>
-                <span v-else-if="s.rattrapage_close_at">Fermé le : {{ formatDate(s.rattrapage_close_at) }}</span>
-              </div>
-            </div>
-
-            <!-- Chips stats réclamations -->
-            <div class="d-flex gap-2 mt-3 flex-wrap">
-              <v-chip size="small" color="blue" variant="tonal" prepend-icon="mdi-message-text">
-                {{ s.reclamations_count ?? 0 }} réclamations
-              </v-chip>
-              <v-chip size="small" color="orange" variant="tonal" prepend-icon="mdi-clock-outline">
-                {{ s.pending_count ?? 0 }} en attente
-              </v-chip>
-            </div>
-
-          </v-card-text>
-
-          <v-divider class="mx-4" />
-
-          <!-- Actions -->
-          <v-card-actions class="px-4 py-3 flex-wrap gap-2">
-
-            <!-- Toggle Réclamations -->
+        <!-- Périodes -->
+        <div class="periods-grid">
+          <!-- Examen -->
+          <div class="period-row">
+            <v-icon size="14" :color="s.is_exam_open ? '#22C55E' : '#CBD5E1'">
+              {{ s.is_exam_open ? 'mdi-check-circle' : 'mdi-circle-outline' }}
+            </v-icon>
+            <span class="period-lbl">Examen</span>
             <v-btn
-              :color="s.is_open ? 'error' : 'success'"
-              size="small"
-              variant="flat"
-              :loading="toggleLoading[`recl_${s.id}`]"
-              @click="askToggle(s, 'reclamation')"
-              prepend-icon="mdi-message-alert"
-            >
-              {{ s.is_open ? 'FERMER' : 'OUVRIR' }}
-            </v-btn>
-
-            <!-- Toggle Examens -->
-            <v-btn
-              :color="s.exam_is_open ? 'error' : 'warning'"
-              size="small"
+              density="compact" size="x-small"
+              :color="s.is_exam_open ? 'error' : 'success'"
               variant="tonal"
-              :loading="toggleLoading[`exam_${s.id}`]"
               @click="askToggle(s, 'exam')"
-              prepend-icon="mdi-file-document-edit"
-            >
-              {{ s.exam_is_open ? 'Fermer Exam' : 'Ouvrir Exam' }}
-            </v-btn>
-
-            <!-- Toggle Rattrapage -->
+            >{{ s.is_exam_open ? 'Fermer' : 'Ouvrir' }}</v-btn>
+          </div>
+          <!-- Rattrapage -->
+          <div class="period-row">
+            <v-icon size="14" :color="s.is_rattrapage_open ? '#22C55E' : '#CBD5E1'">
+              {{ s.is_rattrapage_open ? 'mdi-check-circle' : 'mdi-circle-outline' }}
+            </v-icon>
+            <span class="period-lbl">Rattrapage</span>
             <v-btn
-              :color="s.rattrapage_is_open ? 'error' : 'deep-purple'"
-              size="small"
+              density="compact" size="x-small"
+              :color="s.is_rattrapage_open ? 'error' : 'success'"
               variant="tonal"
-              :loading="toggleLoading[`rattr_${s.id}`]"
               @click="askToggle(s, 'rattrapage')"
-              prepend-icon="mdi-refresh-circle"
-            >
-              {{ s.rattrapage_is_open ? 'Fermer Rattr' : 'Ouvrir Rattr' }}
-            </v-btn>
+            >{{ s.is_rattrapage_open ? 'Fermer' : 'Ouvrir' }}</v-btn>
+          </div>
+        </div>
 
-            <v-spacer />
-
-            <!-- Modifier -->
-            <v-btn
-              icon="mdi-pencil"
-              size="small"
-              variant="text"
-              color="primary"
-              @click="openEditDialog(s)"
-            />
-
-          </v-card-actions>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Dialog confirmation -->
-    <v-dialog v-model="confirmDialog.show" max-width="440">
-      <v-card rounded="xl">
-        <v-card-title class="text-h6 pt-5 px-6">
-          <v-icon :color="confirmDialog.color" class="mr-2">{{ confirmDialog.icon }}</v-icon>
-          {{ confirmDialog.title }}
-        </v-card-title>
-        <v-card-text class="px-6">{{ confirmDialog.message }}</v-card-text>
-        <v-card-actions class="px-6 pb-5">
-          <v-spacer />
-          <v-btn variant="text" @click="confirmDialog.show = false">Annuler</v-btn>
+        <!-- Actions carte -->
+        <v-divider class="my-3" />
+        <div class="card-actions">
           <v-btn
-            :color="confirmDialog.color"
-            variant="flat"
-            :loading="confirmDialog.loading"
-            @click="confirmToggle"
-          >
+            size="small"
+            :color="s.is_open ? 'error' : 'success'"
+            variant="tonal"
+            :prepend-icon="s.is_open ? 'mdi-lock' : 'mdi-lock-open'"
+            @click="askToggle(s, 'reclamation')"
+          >{{ s.is_open ? 'Fermer' : 'Ouvrir' }}</v-btn>
+          <v-btn
+            size="small" variant="outlined" color="#0F2D5E"
+            prepend-icon="mdi-pencil"
+            @click="openEditDialog(s)"
+          >Modifier</v-btn>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ─── Dialog confirmation ──────────────────────────────────── -->
+    <v-dialog v-model="confirmDialog" max-width="420">
+      <v-card rounded="xl" elevation="4" class="pa-6">
+        <div class="confirm-icon-wrap">
+          <v-icon :color="confirmMeta.iconColor" size="44">{{ confirmMeta.icon }}</v-icon>
+        </div>
+        <div class="confirm-title">{{ confirmMeta.title }}</div>
+        <div class="confirm-body">{{ confirmMeta.body }}</div>
+        <div class="confirm-btns">
+          <v-btn variant="outlined" color="grey-darken-1" rounded="lg" @click="confirmDialog = false">
+            Annuler
+          </v-btn>
+          <v-btn :color="confirmMeta.btnColor" rounded="lg" :loading="toggling" @click="confirmToggle">
             Confirmer
           </v-btn>
-        </v-card-actions>
+        </div>
       </v-card>
     </v-dialog>
 
-    <!-- Dialog créer / modifier -->
-    <v-dialog v-model="formDialog" max-width="520">
-      <v-card rounded="xl">
-        <v-card-title class="text-h6 pt-5 px-6">
-          {{ editId ? 'Modifier le semestre' : 'Nouveau semestre' }}
-        </v-card-title>
-        <v-card-text class="px-6">
+    <!-- ─── Dialog formulaire ────────────────────────────────────── -->
+    <v-dialog v-model="formDialog" max-width="540" scrollable>
+      <v-card rounded="xl" elevation="4">
+        <div class="form-dialog-head">
+          <v-icon size="22" color="#0F2D5E" class="mr-2">
+            {{ editing ? 'mdi-pencil-circle' : 'mdi-plus-circle' }}
+          </v-icon>
+          {{ editing ? 'Modifier le semestre' : 'Nouveau semestre' }}
+        </div>
+        <v-divider />
+        <v-card-text class="pa-6">
           <v-row dense>
-            <v-col cols="6">
-              <v-text-field v-model="form.code" label="Code (ex: S1)" variant="outlined" density="compact" />
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.code" label="Code *" variant="outlined" density="comfortable" :error-messages="formErrors.code" />
             </v-col>
-            <v-col cols="6">
-              <v-text-field v-model="form.academic_year" label="Année (ex: 2024-2025)" variant="outlined" density="compact" />
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.academic_year" label="Année académique *" placeholder="2025-2026" variant="outlined" density="comfortable" :error-messages="formErrors.academic_year" />
             </v-col>
             <v-col cols="12">
-              <v-text-field v-model="form.label" label="Libellé" variant="outlined" density="compact" />
+              <v-text-field v-model="form.label" label="Libellé *" variant="outlined" density="comfortable" :error-messages="formErrors.label" />
             </v-col>
-            <v-col cols="6">
-              <v-text-field v-model.number="form.ordre" label="Ordre" type="number" variant="outlined" density="compact" />
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.order_index" label="Ordre" type="number" min="1" variant="outlined" density="comfortable" />
             </v-col>
-            <v-col cols="6">
+            <v-col cols="12" sm="6">
               <v-select
                 v-model="form.niveau_id"
                 :items="niveaux"
@@ -240,58 +176,77 @@
                 item-value="id"
                 label="Niveau"
                 variant="outlined"
-                density="compact"
+                density="comfortable"
+                clearable
               />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.open_at" label="Ouverture" type="datetime-local" variant="outlined" density="comfortable" />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.close_at" label="Fermeture" type="datetime-local" variant="outlined" density="comfortable" />
             </v-col>
           </v-row>
         </v-card-text>
-        <v-card-actions class="px-6 pb-5">
+        <v-divider />
+        <v-card-actions class="pa-4">
+          <v-btn variant="outlined" color="grey-darken-1" @click="formDialog = false">Annuler</v-btn>
           <v-spacer />
-          <v-btn variant="text" @click="formDialog = false">Annuler</v-btn>
-          <v-btn color="primary" variant="flat" :loading="formLoading" @click="submitForm">
-            {{ editId ? 'Modifier' : 'Créer' }}
+          <v-btn color="#0F2D5E" :loading="submitting" @click="submitForm">
+            {{ editing ? 'Enregistrer' : 'Créer' }}
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- Snackbar -->
-    <v-snackbar v-model="snack.show" :color="snack.color" timeout="3000" location="bottom right" rounded="xl">
+    <!-- ─── Snackbar ─────────────────────────────────────────────── -->
+    <v-snackbar v-model="snack.show" :color="snack.color" location="bottom right" timeout="3500" rounded="lg">
+      <v-icon size="18" class="mr-2">{{ snack.color === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle' }}</v-icon>
       {{ snack.text }}
     </v-snackbar>
 
-  </v-container>
+  </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import api from '@/api/axios'
 
-// ── State ───────────────────────────────────────────────
-const loading      = ref(false)
-const semestres    = ref([])
-const niveaux      = ref([])
-const toggleLoading = ref({})
+/* ─── État ───────────────────────────────────────────────────────── */
+const loading   = ref(true)
+const toggling  = ref(false)
+const submitting = ref(false)
+const semestres = ref([])
+const niveaux   = ref([])
+const editing   = ref(false)
 
-const confirmDialog = ref({
-  show: false, loading: false,
-  title: '', message: '', color: 'primary', icon: '',
-  semestre: null, kind: ''
-})
+/* Snackbar */
+const snack = reactive({ show: false, text: '', color: 'success' })
+function notify(text, color = 'success') {
+  snack.text  = text
+  snack.color = color
+  snack.show  = true
+}
 
-const formDialog  = ref(false)
-const formLoading = ref(false)
-const editId      = ref(null)
-const form        = ref({ code: '', label: '', academic_year: '', ordre: 1, niveau_id: null })
-const snack       = ref({ show: false, text: '', color: 'success' })
+/* Dialogs */
+const confirmDialog = ref(false)
+const formDialog    = ref(false)
 
-// ── Computed ────────────────────────────────────────────
-const currentYear = computed(() => new Date().getFullYear())
+/* Données de confirmation */
+const confirmMeta = reactive({ title:'', body:'', icon:'mdi-help-circle', iconColor:'warning', btnColor:'primary' })
+let toggleTarget = null
+let toggleKind   = null
 
-// ── Helpers ─────────────────────────────────────────────
-function formatDate(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+/* Formulaire */
+const formErrors = reactive({})
+const form = reactive({ code:'', label:'', academic_year:'', order_index:1, niveau_id:null, open_at:'', close_at:'' })
+
+/* ─── Helpers ────────────────────────────────────────────────────── */
+function formatDate(raw) {
+  if (!raw) return '—'
+  try {
+    return new Date(raw).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' })
+  } catch { return raw }
 }
 
 function calcProgress(s) {
@@ -299,152 +254,219 @@ function calcProgress(s) {
   const start = new Date(s.open_at).getTime()
   const end   = new Date(s.close_at).getTime()
   const now   = Date.now()
-  if (now >= end)   return 100
   if (now <= start) return 0
+  if (now >= end)   return 100
   return Math.round(((now - start) / (end - start)) * 100)
 }
 
-function daysRemaining(s) {
-  if (!s.close_at) return 0
-  const diff = new Date(s.close_at).getTime() - Date.now()
-  return Math.max(0, Math.ceil(diff / 86400000))
+function daysRemaining(closeAt) {
+  if (!closeAt) return -1
+  const diff = new Date(closeAt).getTime() - Date.now()
+  return diff < 0 ? -1 : Math.ceil(diff / 86400000)
 }
 
-function notify(text, color = 'success') {
-  snack.value = { show: true, text, color }
-}
-
-// ── Chargement ──────────────────────────────────────────
+/* ─── Chargement ─────────────────────────────────────────────────── */
 async function loadData() {
   loading.value = true
   try {
-    const [sRes, nRes] = await Promise.all([
+    const [semRes, nivRes] = await Promise.all([
       api.get('/admin/semestres'),
-      api.get('/admin/niveaux').catch(() => ({ data: { data: [] } }))
+      api.get('/admin/niveaux'),
     ])
-    semestres.value = sRes.data?.data ?? sRes.data ?? []
-    niveaux.value   = nRes.data?.data ?? nRes.data ?? []
-  } catch (e) {
-    notify('Erreur lors du chargement.', 'error')
+    semestres.value = semRes.data?.data ?? semRes.data ?? []
+    niveaux.value   = nivRes.data?.data ?? nivRes.data ?? []
+  } catch (err) {
+    notify('Impossible de charger les données.', 'error')
+    console.error('[Semestres] loadData:', err)
   } finally {
     loading.value = false
   }
 }
 
-// ── Toggle ──────────────────────────────────────────────
-function askToggle(s, kind) {
-  const isOpen = kind === 'reclamation' ? s.is_open
-               : kind === 'exam'        ? s.exam_is_open
-               :                          s.rattrapage_is_open
-
-  const meta = {
-    reclamation: { label: 'Réclamations', icon: 'mdi-message-alert',      color: isOpen ? 'error' : 'success'     },
-    exam:        { label: 'Examens',       icon: 'mdi-file-document-edit', color: isOpen ? 'error' : 'warning'     },
-    rattrapage:  { label: 'Rattrapage',    icon: 'mdi-refresh-circle',     color: isOpen ? 'error' : 'deep-purple' },
-  }[kind]
-
-  confirmDialog.value = {
-    show: true, loading: false,
-    semestre: s, kind,
-    color:   meta.color,
-    icon:    meta.icon,
-    title:   `${isOpen ? 'Fermer' : 'Ouvrir'} – ${meta.label}`,
-    message: `Confirmer l'action sur le semestre ${s.code} (${s.academic_year}) ?`
+/* ─── Toggle ─────────────────────────────────────────────────────── */
+function askToggle(sem, kind) {
+  toggleTarget = sem
+  toggleKind   = kind
+  const isOpen = kind === 'exam'
+    ? sem.is_exam_open
+    : kind === 'rattrapage'
+      ? sem.is_rattrapage_open
+      : sem.is_open
+  const labels = {
+    reclamation: ['réclamation', 'mdi-file-document', 'primary'],
+    exam:        ['examen',      'mdi-school',        'orange-darken-1'],
+    rattrapage:  ['rattrapage',  'mdi-refresh',       'deep-purple'],
   }
+  const [lbl, icon, btnColor] = labels[kind] ?? ['période', 'mdi-calendar', 'primary']
+  confirmMeta.title     = `${isOpen ? 'Fermer' : 'Ouvrir'} la période de ${lbl}`
+  confirmMeta.body      = `Voulez-vous ${isOpen ? 'fermer' : 'ouvrir'} la période de ${lbl} pour le semestre « ${sem.label} » ?`
+  confirmMeta.icon      = isOpen ? 'mdi-lock' : 'mdi-lock-open'
+  confirmMeta.iconColor = isOpen ? 'error' : 'success'
+  confirmMeta.btnColor  = isOpen ? 'error' : 'success'
+  confirmDialog.value   = true
 }
 
 async function confirmToggle() {
-  const { semestre, kind } = confirmDialog.value
-  const loadKey  = kind === 'reclamation' ? `recl_${semestre.id}` : kind === 'exam' ? `exam_${semestre.id}` : `rattr_${semestre.id}`
-  const endpoint = kind === 'reclamation' ? `/admin/semestres/${semestre.id}/toggle`
-                 : kind === 'exam'        ? `/admin/semestres/${semestre.id}/toggle-exam`
-                 :                          `/admin/semestres/${semestre.id}/toggle-rattrapage`
-
-  confirmDialog.value.loading    = true
-  toggleLoading.value[loadKey]   = true
-
+  if (!toggleTarget || !toggleKind) return
+  toggling.value = true
   try {
-    const res     = await api.put(endpoint)
-    const updated = res.data?.data
-    if (updated) {
-      const idx = semestres.value.findIndex(s => s.id === semestre.id)
-      if (idx !== -1) semestres.value[idx] = { ...semestres.value[idx], ...updated }
+    const urlMap = {
+      reclamation: `/admin/semestres/${toggleTarget.id}/toggle`,
+      exam:        `/admin/semestres/${toggleTarget.id}/toggle-exam`,
+      rattrapage:  `/admin/semestres/${toggleTarget.id}/toggle-rattrapage`,
     }
-    notify(res.data?.message ?? 'Mis à jour avec succès.')
-    confirmDialog.value.show = false
-  } catch (e) {
-    notify(e.response?.data?.message ?? 'Erreur lors de la mise à jour.', 'error')
+    const res = await api.put(urlMap[toggleKind])
+    /* mise à jour locale */
+    const idx = semestres.value.findIndex(s => s.id === toggleTarget.id)
+    if (idx !== -1) {
+      if (toggleKind === 'reclamation') semestres.value[idx].is_open            = res.data?.data?.is_open            ?? !toggleTarget.is_open
+      if (toggleKind === 'exam')        semestres.value[idx].is_exam_open        = res.data?.data?.is_exam_open        ?? !toggleTarget.is_exam_open
+      if (toggleKind === 'rattrapage')  semestres.value[idx].is_rattrapage_open  = res.data?.data?.is_rattrapage_open  ?? !toggleTarget.is_rattrapage_open
+    }
+    notify(res.data?.message ?? 'Période mise à jour.', 'success')
+  } catch (err) {
+    notify(err.response?.data?.message ?? 'Erreur lors du toggle.', 'error')
   } finally {
-    confirmDialog.value.loading  = false
-    toggleLoading.value[loadKey] = false
+    toggling.value    = false
+    confirmDialog.value = false
+    toggleTarget = null
+    toggleKind   = null
   }
 }
 
-// ── Formulaire ──────────────────────────────────────────
+/* ─── Formulaire ─────────────────────────────────────────────────── */
+function resetForm() {
+  form.code          = ''
+  form.label         = ''
+  form.academic_year = ''
+  form.order_index   = 1
+  form.niveau_id     = null
+  form.open_at       = ''
+  form.close_at      = ''
+  Object.keys(formErrors).forEach(k => delete formErrors[k])
+}
+
+let editingId = null
+
 function openCreateDialog() {
-  editId.value = null
-  form.value   = { code: '', label: '', academic_year: '', ordre: 1, niveau_id: null }
+  editing.value = false
+  editingId     = null
+  resetForm()
   formDialog.value = true
 }
 
-function openEditDialog(s) {
-  editId.value = s.id
-  form.value   = {
-    code:          s.code,
-    label:         s.label,
-    academic_year: s.academic_year,
-    ordre:         s.order_index,
-    niveau_id:     s.niveau_id
-  }
+function openEditDialog(sem) {
+  editing.value = true
+  editingId     = sem.id
+  form.code          = sem.code ?? ''
+  form.label         = sem.label ?? ''
+  form.academic_year = sem.academic_year ?? ''
+  form.order_index   = sem.order_index ?? 1
+  form.niveau_id     = sem.niveau_id ?? null
+  /* convertir en format datetime-local (YYYY-MM-DDTHH:mm) */
+  form.open_at  = sem.open_at  ? sem.open_at.slice(0, 16)  : ''
+  form.close_at = sem.close_at ? sem.close_at.slice(0, 16) : ''
+  Object.keys(formErrors).forEach(k => delete formErrors[k])
   formDialog.value = true
 }
 
 async function submitForm() {
-  formLoading.value = true
-  const payload = {
-    code:          form.value.code,
-    label:         form.value.label,
-    academic_year: form.value.academic_year,
-    order_index:   form.value.ordre,
-    niveau_id:     form.value.niveau_id,
-  }
+  Object.keys(formErrors).forEach(k => delete formErrors[k])
+  /* Validation basique */
+  let valid = true
+  if (!form.code.trim())          { formErrors.code          = 'Champ obligatoire.'; valid = false }
+  if (!form.label.trim())         { formErrors.label         = 'Champ obligatoire.'; valid = false }
+  if (!form.academic_year.trim()) { formErrors.academic_year = 'Champ obligatoire.'; valid = false }
+  if (!valid) return
+
+  submitting.value = true
   try {
-    if (editId.value) {
-      await api.put(`/admin/semestres/${editId.value}`, payload)
-      notify('Semestre mis à jour.')
+    const payload = {
+      code:          form.code.trim(),
+      label:         form.label.trim(),
+      academic_year: form.academic_year.trim(),
+      order_index:   Number(form.order_index) || 1,
+      niveau_id:     form.niveau_id || null,
+      open_at:       form.open_at  || null,
+      close_at:      form.close_at || null,
+    }
+    if (editing.value) {
+      await api.put(`/admin/semestres/${editingId}`, payload)
+      notify('Semestre mis à jour avec succès.', 'success')
     } else {
       await api.post('/admin/semestres', payload)
-      notify('Semestre créé.')
+      notify('Semestre créé avec succès.', 'success')
     }
     formDialog.value = false
     await loadData()
-  } catch (e) {
-    notify(e.response?.data?.message ?? 'Erreur lors de la sauvegarde.', 'error')
+  } catch (err) {
+    const errors = err.response?.data?.errors
+    if (errors) Object.assign(formErrors, errors)
+    notify(err.response?.data?.message ?? 'Erreur lors de l\'enregistrement.', 'error')
   } finally {
-    formLoading.value = false
+    submitting.value = false
   }
 }
 
+/* ─── Lifecycle ──────────────────────────────────────────────────── */
 onMounted(loadData)
 </script>
 
 <style scoped>
-.semestre-card {
+/* ── Layout ── */
+.semestres-page { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+
+/* ── Header ── */
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; }
+.page-title  { font-size: 1.5rem; font-weight: 700; color: #0F172A; margin: 0; }
+.page-sub    { font-size: .875rem; color: #64748B; margin: 4px 0 0; }
+
+/* ── Loaders & vide ── */
+.loading-center { display: flex; justify-content: center; align-items: center; min-height: 240px; }
+.empty-state    { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320px; gap: 12px; text-align: center; }
+.empty-title    { font-size: 1.1rem; font-weight: 600; color: #475569; margin: 0; }
+.empty-sub      { font-size: .875rem; color: #94A3B8; margin: 0; }
+
+/* ── Grille ── */
+.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+
+/* ── Carte ── */
+.sem-card {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.06);
   transition: box-shadow .2s, transform .2s;
 }
-.semestre-card:hover {
-  box-shadow: 0 8px 32px rgba(0,0,0,.14) !important;
-  transform: translateY(-2px);
-}
-.info-row {
-  display: flex;
-  align-items: center;
-}
-.period-block {
-  border: 1px solid rgba(0,0,0,.08);
-}
-.exam-open   { background: rgba(255, 152, 0, .08); }
-.exam-closed { background: rgba(0,0,0,.03); }
-.rattr-open  { background: rgba(103, 58, 183, .08); }
-.rattr-closed{ background: rgba(0,0,0,.03); }
+.sem-card:hover { box-shadow: 0 6px 24px rgba(15,45,94,.10); transform: translateY(-2px); }
+
+/* Header de carte */
+.card-top   { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.card-meta  { display: flex; flex-direction: column; gap: 2px; }
+.card-code  { font-size: .8rem; font-weight: 700; color: #0F2D5E; letter-spacing: .05em; text-transform: uppercase; background: #EFF6FF; border-radius: 6px; padding: 2px 8px; width: fit-content; }
+.card-label { font-size: .95rem; font-weight: 600; color: #1E293B; margin-top: 4px; }
+.card-year  { font-size: .78rem; color: #94A3B8; display: flex; align-items: center; gap: 3px; }
+.card-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+/* Dates */
+.card-dates   { display: flex; align-items: center; gap: 5px; font-size: .78rem; color: #6B7280; flex-wrap: wrap; margin-bottom: 4px; }
+.days-badge   { background: #FEF9C3; color: #854D0E; border-radius: 20px; padding: 1px 8px; font-size: .72rem; font-weight: 600; margin-left: 4px; }
+
+/* Périodes */
+.periods-grid { display: flex; flex-direction: column; gap: 8px; }
+.period-row   { display: flex; align-items: center; gap: 6px; }
+.period-lbl   { font-size: .82rem; color: #475569; flex: 1; }
+
+/* Actions */
+.card-actions { display: flex; justify-content: space-between; gap: 8px; }
+
+/* ── Dialog confirmation ── */
+.confirm-icon-wrap { text-align: center; margin-bottom: 12px; }
+.confirm-title     { font-size: 1.05rem; font-weight: 700; color: #1E293B; text-align: center; margin-bottom: 8px; }
+.confirm-body      { font-size: .875rem; color: #64748B; text-align: center; margin-bottom: 20px; line-height: 1.5; }
+.confirm-btns      { display: flex; justify-content: center; gap: 12px; }
+
+/* ── Dialog formulaire ── */
+.form-dialog-head  { display: flex; align-items: center; font-size: 1rem; font-weight: 700; color: #0F2D5E; padding: 20px 24px 16px; }
 </style>

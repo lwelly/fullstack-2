@@ -1,155 +1,693 @@
 <template>
-  <v-app :theme="appTheme">
+  <v-app :theme="currentTheme">
 
-    <v-navigation-drawer permanent width="220" style="background:#0F2D5E; border:none;">
+    <!-- ═══════════════════════════════════════════════════════════
+         NAVIGATION DRAWER
+    ════════════════════════════════════════════════════════════════ -->
+    <v-navigation-drawer
+      v-model="drawer"
+      :rail="rail && !mobile"
+      :temporary="mobile"
+      :width="260"
+      :rail-width="68"
+      class="admin-drawer"
+      :class="{ 'drawer-dark': isDark }"
+    >
 
-      <div class="px-4 py-4">
-        <div class="d-flex align-center gap-2">
-          <v-icon color="white" size="28">mdi-school</v-icon>
-          <div>
-            <div class="text-white font-weight-bold" style="font-size:16px;line-height:1">ISCAE</div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.5);letter-spacing:1px">ADMIN</div>
-          </div>
+      <!-- ── Logo ── -->
+      <div class="drawer-logo" :class="{ 'logo-collapsed': rail && !mobile }">
+        <div class="logo-icon-wrap">
+          <v-icon size="20" color="white">mdi-shield-account</v-icon>
         </div>
-      </div>
-
-      <v-divider style="border-color:rgba(255,255,255,0.1)" />
-
-      <div class="px-2 py-3">
-        <router-link
-          v-for="item in navItems"
-          :key="item.name"
-          :to="item.to"
-          class="nav-link"
-          :class="{ active: route.name === item.name }"
-        >
-          <v-icon size="18">{{ item.icon }}</v-icon>
-          <span>{{ item.title }}</span>
-          <span v-if="item.badge && unread > 0" class="badge">{{ unread }}</span>
-        </router-link>
-      </div>
-
-      <template #append>
-        <v-divider style="border-color:rgba(255,255,255,0.1)" />
-        <div class="d-flex align-center justify-space-between px-3 py-3">
-          <div class="d-flex align-center gap-2">
-            <v-avatar size="30" color="#2563EB">
-              <span style="font-size:11px;font-weight:700;color:white">{{ initials }}</span>
-            </v-avatar>
-            <div>
-              <div style="font-size:12px;font-weight:600;color:white;max-width:100px" class="text-truncate">
-                {{ user?.name ?? 'Administrateur' }}
-              </div>
-              <div style="font-size:10px;color:rgba(255,255,255,0.5)">Admin</div>
-            </div>
+        <transition name="logo-slide">
+          <div v-if="!rail || mobile" class="logo-texts">
+            <span class="logo-app">ISCAE</span>
+            <span class="logo-sub">Administration</span>
           </div>
-          <v-btn icon size="x-small" variant="text" @click="logout">
-            <v-icon color="rgba(255,255,255,0.5)" size="18">mdi-logout</v-icon>
-          </v-btn>
+        </transition>
+      </div>
+
+      <!-- ── Séparateur + label section ── -->
+      <div class="drawer-section-label" :class="{ 'label-hidden': rail && !mobile }">
+        <span>NAVIGATION</span>
+      </div>
+
+      <!-- ── Nav items ── -->
+      <v-list density="compact" nav class="nav-list px-2">
+        <template v-for="item in navItems" :key="item.to ?? item.label">
+
+          <!-- Groupe avec enfants -->
+          <template v-if="item.children">
+            <div
+              class="nav-group-header"
+              :class="{ 'group-active': isGroupActive(item) }"
+              @click="toggleGroup(item.label)"
+            >
+              <div class="nav-item-inner">
+                <div class="nav-icon-wrap" :class="{ 'icon-active': isGroupActive(item) }">
+                  <v-icon size="18">{{ item.icon }}</v-icon>
+                </div>
+                <transition name="label-fade">
+                  <span v-if="!rail || mobile" class="nav-label">{{ item.label }}</span>
+                </transition>
+              </div>
+              <transition name="label-fade">
+                <v-icon v-if="!rail || mobile" size="16" class="group-arrow"
+                        :class="{ 'arrow-open': openGroups.includes(item.label) }">
+                  mdi-chevron-down
+                </v-icon>
+              </transition>
+            </div>
+            <v-expand-transition>
+              <div v-if="openGroups.includes(item.label) && (!rail || mobile)" class="nav-children">
+                <router-link
+                  v-for="child in item.children" :key="child.to"
+                  :to="child.to"
+                  class="nav-child-item"
+                  :class="{ 'child-active': $route.path === child.to || $route.path.startsWith(child.to + '/') }"
+                >
+                  <v-icon size="14" class="mr-2">{{ child.icon }}</v-icon>
+                  {{ child.label }}
+                </router-link>
+              </div>
+            </v-expand-transition>
+          </template>
+
+          <!-- Item simple -->
+          <router-link
+            v-else
+            :to="item.to"
+            class="nav-item-link"
+            :class="{ 'link-active': isActive(item.to) }"
+            :title="rail && !mobile ? item.label : undefined"
+          >
+            <div class="nav-item-inner">
+              <div class="nav-icon-wrap" :class="{ 'icon-active': isActive(item.to) }">
+                <v-icon size="18">{{ item.icon }}</v-icon>
+              </div>
+              <transition name="label-fade">
+                <span v-if="!rail || mobile" class="nav-label">{{ item.label }}</span>
+              </transition>
+            </div>
+            <transition name="label-fade">
+              <v-badge
+                v-if="item.badge && (!rail || mobile)"
+                :content="item.badge"
+                color="error"
+                inline
+              />
+            </transition>
+          </router-link>
+
+        </template>
+      </v-list>
+
+      <!-- ── Footer drawer ── -->
+      <template #append>
+        <div class="drawer-divider" />
+        <div class="drawer-footer" :class="{ 'footer-collapsed': rail && !mobile }">
+          <v-avatar :color="adminAvatarColor" size="34" class="avatar-admin flex-shrink-0">
+            <span class="text-caption font-weight-bold text-white">{{ adminInitials }}</span>
+          </v-avatar>
+          <transition name="label-fade">
+            <div v-if="!rail || mobile" class="footer-info">
+              <span class="footer-name">{{ adminFullName }}</span>
+              <span class="footer-role">{{ roleLabel }}</span>
+            </div>
+          </transition>
         </div>
       </template>
+
     </v-navigation-drawer>
 
-    <v-app-bar flat height="56" color="white" style="border-bottom:1px solid #E5E7EB;">
-      <v-app-bar-nav-icon class="d-md-none" @click="drawer = !drawer" />
-      <v-app-bar-title>
-        <span style="font-size:15px;font-weight:700;color:#111827">{{ pageTitle }}</span>
-      </v-app-bar-title>
-      <template #append>
-        <!-- ✅ Toggle thème — utilise inject depuis App.vue -->
-        <v-btn icon variant="text" size="small" class="mr-1" @click="toggleThemeGlobal">
-          <v-icon size="20">{{ isDark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
-        </v-btn>
-        <v-avatar
-          size="32" color="#0F2D5E" class="mr-3"
-          style="cursor:pointer"
-          @click="router.push({ name: 'admin.profile' })"
-        >
-          <span style="font-size:11px;font-weight:700;color:white">{{ initials }}</span>
-        </v-avatar>
-      </template>
+    <!-- ═══════════════════════════════════════════════════════════
+         APP BAR
+    ════════════════════════════════════════════════════════════════ -->
+    <v-app-bar
+      :color="isDark ? '#1E1E2E' : 'white'"
+      elevation="0"
+      class="admin-appbar"
+      :class="{ 'appbar-dark': isDark }"
+    >
+      <!-- Toggle sidebar -->
+      <v-btn
+        :icon="rail && !mobile ? 'mdi-menu-open' : 'mdi-menu'"
+        variant="text"
+        :color="isDark ? '#A9B1D6' : '#0F2D5E'"
+        class="ml-1"
+        @click="toggleSidebar"
+      />
+
+      <!-- Breadcrumb / titre -->
+      <div class="appbar-breadcrumb ml-2">
+        <span class="appbar-section">Admin</span>
+        <v-icon size="14" :color="isDark ? '#565F89' : '#CBD5E1'" class="mx-1">mdi-chevron-right</v-icon>
+        <span class="appbar-page" :class="{ 'page-dark': isDark }">{{ currentPageTitle }}</span>
+      </div>
+
+      <v-spacer />
+
+      <!-- Recherche globale -->
+      <v-text-field
+        v-model="globalSearch"
+        placeholder="Rechercher…"
+        prepend-inner-icon="mdi-magnify"
+        variant="solo-filled"
+        density="compact"
+        hide-details
+        flat
+        rounded="lg"
+        class="appbar-search mr-3"
+        :class="{ 'search-dark': isDark }"
+        style="max-width:220px"
+        @keyup.enter="onSearch"
+      />
+
+      <!-- Notifications -->
+      
+      <!-- Toggle thème -->
+      <v-tooltip :text="isDark ? 'Mode clair' : 'Mode sombre'" location="bottom">
+        <template #activator="{ props }">
+          <v-btn v-bind="props" variant="text" icon class="mr-1" @click="toggleTheme">
+            <v-icon :color="isDark ? '#A9B1D6' : '#475569'">
+              {{ isDark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}
+            </v-icon>
+          </v-btn>
+        </template>
+      </v-tooltip>
+
+      <!-- Menu admin -->
+      <v-menu min-width="210" :theme="currentTheme">
+        <template #activator="{ props }">
+          <v-btn v-bind="props" variant="text" rounded="lg" class="mr-2 pa-1 user-btn">
+            <v-avatar :color="adminAvatarColor" size="32">
+              <span class="text-caption font-weight-bold text-white">{{ adminInitials }}</span>
+            </v-avatar>
+            <span v-if="!mobile" class="ml-2 user-btn-name" :class="{ 'name-dark': isDark }">
+              {{ adminFirstName }}
+            </span>
+            <v-icon size="16" class="ml-1" :color="isDark ? '#565F89' : '#CBD5E1'">mdi-chevron-down</v-icon>
+          </v-btn>
+        </template>
+
+        <v-list density="compact" rounded="xl" elevation="8" class="user-menu" :class="{ 'menu-dark': isDark }">
+          <!-- Header user -->
+          <div class="user-menu-header">
+            <v-avatar :color="adminAvatarColor" size="42">
+              <span class="text-body-2 font-weight-bold text-white">{{ adminInitials }}</span>
+            </v-avatar>
+            <div class="user-menu-info">
+              <div class="user-menu-name">{{ adminFullName }}</div>
+              <div class="user-menu-role">{{ roleLabel }}</div>
+            </div>
+          </div>
+          <v-divider class="mb-1" />
+          <v-list-item prepend-icon="mdi-account-circle" title="Mon profil"    to="/admin/profile"   rounded="lg" />
+          <v-list-item prepend-icon="mdi-cog"            title="Paramètres"    to="/admin/settings"  rounded="lg" />
+          <v-divider class="my-1" />
+          <v-list-item prepend-icon="mdi-logout" title="Se déconnecter"
+                       base-color="error" rounded="lg" @click="logout" />
+        </v-list>
+      </v-menu>
     </v-app-bar>
 
-    <v-main>
-      <v-container fluid class="pa-6">
+    <!-- ═══════════════════════════════════════════════════════════
+         MAIN CONTENT
+    ════════════════════════════════════════════════════════════════ -->
+    <v-main class="admin-main" :class="{ 'main-dark': isDark }">
+      <div class="page-wrapper">
         <router-view />
-      </v-container>
+      </div>
     </v-main>
 
   </v-app>
 </template>
 
 <script setup>
-import { ref, computed, inject, onMounted } from 'vue'
-import { useRoute, useRouter }              from 'vue-router'
-import { useAuthStore }                     from '@/stores/auth'
-import { useToast }                         from 'vue-toastification'
-import api                                  from '@/api/axios'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useDisplay, useTheme } from 'vuetify'
+import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import api from '@/api/axios'
 
-const route     = useRoute()
-const router    = useRouter()
-const authStore = useAuthStore()
-const toast     = useToast()
+const router  = useRouter()
+const route   = useRoute()
+const auth    = useAuthStore()
+const vuetifyTheme = useTheme()
+const { mobile } = useDisplay()
 
-// ✅ Récupère le thème depuis App.vue via inject
-const isDark          = inject('isDark')
-const toggleThemeGlobal = inject('toggleTheme')
-const appTheme        = inject('appTheme')
+/* ── État ── */
+const drawer       = ref(true)
+const rail         = ref(false)
+const globalSearch = ref('')
+const notifCount   = ref(0)
+const openGroups   = ref([])
 
-const drawer = ref(true)
-const unread = ref(0)
+/* ── Thème ── */
+const currentTheme = ref(localStorage.getItem('admin_theme') ?? 'light')
+const isDark       = computed(() => currentTheme.value === 'dark')
 
-const user     = computed(() => authStore.user)
-const initials = computed(() =>
-  (user.value?.name ?? 'AD').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-)
+function toggleTheme() {
+  currentTheme.value = isDark.value ? 'light' : 'dark'
+  localStorage.setItem('admin_theme', currentTheme.value)
+  /* Synchronise Vuetify globalement */
+  vuetifyTheme.global.name.value = currentTheme.value
+}
 
+/* ── Sidebar ── */
+function toggleSidebar() {
+  if (mobile.value) {
+    drawer.value = !drawer.value
+  } else {
+    rail.value = !rail.value
+  }
+}
+
+/* ── User ── */
+const user = computed(() => auth.user ?? {})
+const adminFullName = computed(() => {
+  const a = user.value?.admin
+  if (a) {
+    const parts = [a.first_name ?? a.prenom ?? '', a.last_name ?? a.nom ?? ''].filter(Boolean)
+    if (parts.length) return parts.join(' ')
+  }
+  return user.value?.email ?? 'Administrateur'
+})
+const adminFirstName = computed(() => adminFullName.value.split(' ')[0])
+const adminInitials  = computed(() => {
+  const n = adminFullName.value
+  const p = n.trim().split(' ').filter(Boolean)
+  return p.length >= 2 ? (p[0][0] + p[p.length-1][0]).toUpperCase() : n.substring(0,2).toUpperCase()
+})
+const adminAvatarColor = computed(() => {
+  const colors = ['indigo-darken-1','blue-darken-2','teal-darken-1','purple-darken-1','deep-orange-darken-1']
+  const n = adminFullName.value
+  return n ? colors[n.charCodeAt(0) % colors.length] : 'indigo-darken-1'
+})
+const roleLabel = computed(() => {
+  const r = user.value?.role
+  return r === 'super_admin' ? 'Super Admin' : r === 'admin' ? 'Administrateur' : 'Staff'
+})
+
+/* ── Navigation ── */
 const navItems = [
-  { title: 'Tableau de bord', icon: 'mdi-view-dashboard-outline', name: 'admin.dashboard',    to: { name: 'admin.dashboard' } },
-  { title: 'Réclamations',    icon: 'mdi-message-alert-outline',  name: 'admin.reclamations', to: { name: 'admin.reclamations' }, badge: true },
-  { title: 'Étudiants',       icon: 'mdi-account-group-outline',  name: 'admin.students',     to: { name: 'admin.students' } },
-  { title: 'Semestres',       icon: 'mdi-calendar-outline',       name: 'admin.semestres',    to: { name: 'admin.semestres' } },
-  { title: 'Paramètres',      icon: 'mdi-cog-outline',            name: 'admin.settings',     to: { name: 'admin.settings' } },
-  { title: 'Mon Profil',      icon: 'mdi-account-outline',        name: 'admin.profile',      to: { name: 'admin.profile' } },
+  { to: '/admin/dashboard',    label: 'Tableau de bord', icon: 'mdi-view-dashboard' },
+  { to: '/admin/reclamations', label: 'Réclamations',    icon: 'mdi-file-document-multiple' },
+  { to: '/admin/students',     label: 'Étudiants',       icon: 'mdi-account-group' },
+  { to: '/admin/semestres',    label: 'Semestres',       icon: 'mdi-calendar-multiple' },
+  { to: '/admin/settings',     label: 'Paramètres',      icon: 'mdi-cog' },
+  { to: '/admin/profile',      label: 'Mon profil',      icon: 'mdi-account-circle' },
 ]
 
-const titleMap = {
-  'admin.dashboard':          'Tableau de bord',
-  'admin.reclamations':       'Réclamations',
-  'admin.reclamation.detail': 'Détail Réclamation',
-  'admin.students':           'Étudiants',
-  'admin.semestres':          'Semestres',
-  'admin.settings':           'Paramètres',
-  'admin.profile':            'Mon Profil',
-}
-const pageTitle = computed(() => titleMap[route.name] ?? 'Espace Admin')
+const currentPageTitle = computed(() => {
+  const found = navItems.find(i => {
+    if (i.children) return i.children.some(c => route.path.startsWith(c.to))
+    return route.path.startsWith(i.to)
+  })
+  if (found?.children) {
+    const child = found.children.find(c => route.path.startsWith(c.to))
+    return child?.label ?? found.label
+  }
+  return found?.label ?? 'Dashboard'
+})
 
-async function logout() {
-  await authStore.logout()
-  toast.success('Déconnexion réussie.')
-  router.push({ name: 'login' })
+function isActive(to) {
+  return to ? (route.path === to || route.path.startsWith(to + '/')) : false
+}
+function isGroupActive(item) {
+  return item.children?.some(c => route.path.startsWith(c.to)) ?? false
+}
+function toggleGroup(label) {
+  const idx = openGroups.value.indexOf(label)
+  if (idx === -1) openGroups.value.push(label)
+  else openGroups.value.splice(idx, 1)
 }
 
-async function fetchUnread() {
+/* ── Recherche ── */
+function onSearch() {
+  if (!globalSearch.value.trim()) return
+  router.push({ path: '/admin/reclamations', query: { search: globalSearch.value.trim() } })
+  globalSearch.value = ''
+}
+
+/* ── Notifications ── */
+async function fetchNotifCount() {
   try {
-    const res  = await api.get('/admin/reclamations')
-    const list = res.data?.data ?? []
-    unread.value = list.filter(r => r.status === 'submitted').length
-  } catch { unread.value = 0 }
+    const res = await api.get('/admin/notifications', { params: { per_page: 1, read: 0 } })
+    const data = res.data?.data ?? res.data ?? {}
+    notifCount.value = Array.isArray(data) ? data.length : (data.total ?? 0)
+  } catch {}
 }
 
-onMounted(fetchUnread)
+/* ── Logout ── */
+async function logout() {
+  try { await api.post('/auth/logout') } catch {}
+  auth.clear?.()
+  router.push('/login')
+}
+
+/* ── Lifecycle ── */
+onMounted(() => {
+  /* Applique le thème sauvegardé au démarrage */
+  vuetifyTheme.global.name.value = currentTheme.value
+  fetchNotifCount()
+  setInterval(fetchNotifCount, 60_000)
+
+  /* Ferme le drawer sur mobile au démarrage */
+  if (mobile.value) drawer.value = false
+})
+
+watch(mobile, v => {
+  if (v) { drawer.value = false; rail.value = false }
+  else   { drawer.value = true }
+})
 </script>
 
 <style scoped>
-.nav-link {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 12px; border-radius: 8px;
-  color: rgba(255,255,255,0.6); text-decoration: none;
-  font-size: 13px; font-weight: 500; margin-bottom: 2px;
-  transition: background .15s, color .15s;
+/* ════════════════════════════════════════════════════════════════
+   DRAWER — Mode clair
+════════════════════════════════════════════════════════════════ */
+.admin-drawer {
+  background: #0F2D5E !important;
+  border-right: none !important;
+  box-shadow: 4px 0 24px rgba(15, 45, 94, .18) !important;
 }
-.nav-link:hover  { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.9); }
-.nav-link.active { background: rgba(255,255,255,0.12); color: #fff; border-left: 3px solid #2563EB; padding-left: 9px; }
-.badge { margin-left: auto; background: #DC2626; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
+
+/* ── Logo ── */
+.drawer-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 16px 18px;
+  transition: padding .25s;
+}
+.logo-collapsed {
+  justify-content: center;
+  padding: 22px 8px 18px;
+}
+.logo-icon-wrap {
+  width: 36px;
+  height: 36px;
+  background: rgba(255,255,255,.15);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background .2s;
+}
+.logo-icon-wrap:hover { background: rgba(255,255,255,.25); }
+.logo-texts {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.logo-app {
+  font-size: .95rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: .08em;
+  line-height: 1.1;
+}
+.logo-sub {
+  font-size: .68rem;
+  color: rgba(255,255,255,.55);
+  letter-spacing: .04em;
+  margin-top: 1px;
+}
+
+/* ── Label section ── */
+.drawer-section-label {
+  padding: 4px 18px 6px;
+  font-size: .62rem;
+  font-weight: 700;
+  color: rgba(255,255,255,.35);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  transition: opacity .2s;
+}
+.label-hidden { opacity: 0; pointer-events: none; height: 0; padding: 0; overflow: hidden; }
+
+/* ── Nav list ── */
+.nav-list { padding-top: 0 !important; }
+
+/* Link item */
+.nav-item-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  height: 44px;
+  border-radius: 10px;
+  margin-bottom: 3px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .15s;
+  color: rgba(255,255,255,.7);
+}
+.nav-item-link:hover {
+  background: rgba(255,255,255,.1);
+  color: #fff;
+}
+.nav-item-link.link-active {
+  background: rgba(255,255,255,.16);
+  color: #fff;
+}
+
+/* Group header */
+.nav-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  height: 44px;
+  border-radius: 10px;
+  margin-bottom: 3px;
+  cursor: pointer;
+  transition: background .15s;
+  color: rgba(255,255,255,.7);
+}
+.nav-group-header:hover,
+.nav-group-header.group-active { background: rgba(255,255,255,.1); color: #fff; }
+
+/* Inner row */
+.nav-item-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* Icon wrap */
+.nav-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: transparent;
+  transition: background .15s;
+  color: rgba(255,255,255,.7);
+}
+.nav-item-link:hover .nav-icon-wrap,
+.nav-group-header:hover .nav-icon-wrap { background: rgba(255,255,255,.12); color: #fff; }
+.nav-icon-wrap.icon-active {
+  background: rgba(255,255,255,.2);
+  color: #fff;
+}
+
+/* Label */
+.nav-label {
+  font-size: .875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+.link-active .nav-label { font-weight: 600; }
+
+/* Arrow groupe */
+.group-arrow { color: rgba(255,255,255,.45); transition: transform .2s; }
+.arrow-open  { transform: rotate(-180deg); }
+
+/* Children */
+.nav-children { padding: 2px 8px 4px 48px; display: flex; flex-direction: column; gap: 2px; }
+.nav-child-item {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: .825rem;
+  color: rgba(255,255,255,.6);
+  text-decoration: none;
+  transition: background .12s, color .12s;
+}
+.nav-child-item:hover { background: rgba(255,255,255,.08); color: #fff; }
+.nav-child-item.child-active { background: rgba(255,255,255,.14); color: #fff; font-weight: 600; }
+
+/* Active indicator bar */
+.nav-item-link.link-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: #fff;
+  border-radius: 0 3px 3px 0;
+}
+.nav-item-link { position: relative; }
+
+/* Divider + footer */
+.drawer-divider { height: 1px; background: rgba(255,255,255,.1); margin: 0 16px 8px; }
+.drawer-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 20px;
+}
+.footer-collapsed { justify-content: center; padding: 12px 8px 20px; }
+.footer-info { display: flex; flex-direction: column; overflow: hidden; }
+.footer-name {
+  font-size: .82rem;
+  font-weight: 600;
+  color: rgba(255,255,255,.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.footer-role { font-size: .68rem; color: rgba(255,255,255,.5); margin-top: 1px; }
+.avatar-admin { border: 2px solid rgba(255,255,255,.25); }
+
+/* ════════════════════════════════════════════════════════════════
+   DRAWER — Mode sombre
+════════════════════════════════════════════════════════════════ */
+.drawer-dark {
+  background: #16213E !important;
+  box-shadow: 4px 0 24px rgba(0,0,0,.4) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   APP BAR
+════════════════════════════════════════════════════════════════ */
+.admin-appbar {
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+.appbar-dark {
+  border-bottom-color: #2D3748 !important;
+}
+
+.appbar-breadcrumb { display: flex; align-items: center; }
+.appbar-section    { font-size: .8rem; color: #94A3B8; font-weight: 500; }
+.appbar-page       { font-size: .875rem; font-weight: 700; color: #0F172A; }
+.page-dark         { color: #E2E8F0 !important; }
+
+/* Recherche */
+.appbar-search :deep(.v-field) {
+  background: #F1F5F9 !important;
+  font-size: .85rem;
+}
+.search-dark :deep(.v-field) {
+  background: #2D3748 !important;
+}
+.search-dark :deep(.v-field__input)         { color: #E2E8F0 !important; }
+.search-dark :deep(.v-field__prepend-inner) { color: #718096 !important; }
+.search-dark :deep(input::placeholder)      { color: #718096 !important; }
+
+/* User btn */
+.user-btn      { text-transform: none !important; }
+.user-btn-name { font-size: .85rem; font-weight: 600; color: #334155; }
+.name-dark     { color: #CBD5E1 !important; }
+
+/* User menu */
+.user-menu {
+  border-radius: 16px !important;
+  border: 1px solid #E2E8F0;
+  overflow: hidden;
+}
+.menu-dark { border-color: #2D3748 !important; }
+.user-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+.user-menu-name { font-size: .9rem; font-weight: 700; color: #1E293B; }
+.user-menu-role { font-size: .75rem; color: #64748B; }
+
+/* ════════════════════════════════════════════════════════════════
+   MAIN
+════════════════════════════════════════════════════════════════ */
+.admin-main {
+  background: #F8FAFC !important;
+  min-height: 100vh;
+  transition: background .25s;
+}
+.main-dark {
+  background: #0F0F1A !important;
+}
+.page-wrapper {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TRANSITIONS
+════════════════════════════════════════════════════════════════ */
+.logo-slide-enter-active,
+.logo-slide-leave-active { transition: opacity .2s, transform .2s; }
+.logo-slide-enter-from,
+.logo-slide-leave-to     { opacity: 0; transform: translateX(-8px); }
+
+.label-fade-enter-active,
+.label-fade-leave-active { transition: opacity .15s; }
+.label-fade-enter-from,
+.label-fade-leave-to     { opacity: 0; }
+
+/* ════════════════════════════════════════════════════════════════
+   DARK MODE — overrides globaux sur les enfants
+════════════════════════════════════════════════════════════════ */
+
+/* Cards en mode sombre */
+:global(.v-theme--dark .v-card)    { background: #1A1A2E !important; border-color: #2D3748 !important; }
+:global(.v-theme--dark .v-card-title),
+:global(.v-theme--dark .v-list-item-title) { color: #E2E8F0 !important; }
+:global(.v-theme--dark .text-medium-emphasis) { color: #94A3B8 !important; }
+
+/* Inputs en mode sombre */
+:global(.v-theme--dark .v-field) { background: #2D3748 !important; }
+:global(.v-theme--dark .v-field__input) { color: #E2E8F0 !important; }
+:global(.v-theme--dark .v-label)        { color: #94A3B8 !important; }
+
+/* Table / dividers */
+:global(.v-theme--dark .v-divider)      { border-color: #2D3748 !important; }
+:global(.v-theme--dark .rec-head)       { background: #1E1E2E !important; }
+:global(.v-theme--dark .rec-row:hover)  { background: #1E1E2E !important; }
+:global(.v-theme--dark .kpi-card)       { background: #1A1A2E !important; }
+:global(.v-theme--dark .sem-card)       { background: #1A1A2E !important; border-color: #2D3748 !important; }
+:global(.v-theme--dark .filter-tab)     { background: #1A1A2E !important; border-color: #2D3748 !important; color: #94A3B8 !important; }
+:global(.v-theme--dark .filter-tab:hover){ background: #2D3748 !important; }
+:global(.v-theme--dark .pagination-bar) { background: #1E1E2E !important; border-color: #2D3748 !important; }
+:global(.v-theme--dark .search-bar .v-field) { background: #2D3748 !important; }
+:global(.v-theme--dark .page-title)     { color: #E2E8F0 !important; }
+:global(.v-theme--dark .page-sub)       { color: #94A3B8 !important; }
+:global(.v-theme--dark .welcome-banner) { background: linear-gradient(135deg, #0D3B26 0%, #134D33 100%) !important; }
+:global(.v-theme--dark .detail-section) { border-bottom-color: #2D3748 !important; }
+:global(.v-theme--dark .info-key)       { color: #718096 !important; }
+:global(.v-theme--dark .info-val)       { color: #E2E8F0 !important; }
+:global(.v-theme--dark .comment-box)    { background: #2D3748 !important; }
+:global(.v-theme--dark .history-item)   { }
+:global(.v-theme--dark .student-name)   { color: #E2E8F0 !important; }
+:global(.v-theme--dark .card-label)     { color: #E2E8F0 !important; }
+:global(.v-theme--dark .card-year)      { color: #718096 !important; }
+:global(.v-theme--dark .days-badge)     { background: #3D3000 !important; color: #FCD34D !important; }
+:global(.v-theme--dark .empty-state-table),
+:global(.v-theme--dark .empty-state)    { }
+:global(.v-theme--dark .form-dialog-head){ color: #A9B1D6 !important; }
 </style>

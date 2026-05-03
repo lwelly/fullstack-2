@@ -1,161 +1,281 @@
 <template>
   <div class="dashboard-page">
 
-    <!-- Header -->
-    <div class="page-header mb-6">
+    <!-- ── En-tête ──────────────────────────────────────────── -->
+    <div class="d-flex align-center justify-space-between mb-6 flex-wrap gap-3">
       <div>
-        <h1 class="page-title">Tableau de bord</h1>
-        <p class="page-sub">Vue d'ensemble des réclamations — {{ todayFr }}</p>
+        <h1 class="text-h5 font-weight-bold">Tableau de bord</h1>
+        <p class="text-body-2 text-medium-emphasis mb-0">
+          {{ todayFr() }} — Vue d'ensemble des réclamations
+        </p>
       </div>
-      <v-btn color="#0F2D5E" size="small" rounded="lg" variant="flat"
-        prepend-icon="mdi-refresh" :loading="loading" @click="load">
+      <v-btn
+        variant="tonal"
+        color="primary"
+        prepend-icon="mdi-refresh"
+        :loading="loading"
+        @click="load"
+      >
         Actualiser
       </v-btn>
     </div>
 
-    <!-- ── KPI cards ── -->
-    <v-row class="mb-2">
-      <v-col v-for="kpi in kpiCards" :key="kpi.key" cols="12" sm="6" md="3">
-        <div class="kpi-card" :style="{ borderTop: '3px solid ' + kpi.color }">
-          <div class="kpi-icon-wrap" :style="{ background: kpi.color + '18' }">
-            <v-icon :color="kpi.color" size="22">{{ kpi.icon }}</v-icon>
+    <!-- ── KPI Cards ─────────────────────────────────────────── -->
+    <v-row class="mb-6" dense>
+      <v-col
+        v-for="kpi in kpiCards"
+        :key="kpi.key"
+        cols="12" sm="6" md="3"
+      >
+        <v-card
+          elevation="2"
+          rounded="xl"
+          class="kpi-card pa-5"
+          :style="`border-left: 4px solid ${kpi.color}`"
+        >
+          <div class="d-flex align-center justify-space-between mb-3">
+            <span class="text-body-2 text-medium-emphasis font-weight-medium">
+              {{ kpi.label }}
+            </span>
+            <v-avatar :color="kpi.color + '-lighten-4'" size="40">
+              <v-icon :color="kpi.color" size="20">{{ kpi.icon }}</v-icon>
+            </v-avatar>
           </div>
-          <div class="kpi-body">
-            <div class="kpi-value">
-              <span v-if="loading">—</span>
-              <span v-else>{{ stats[kpi.key] ?? 0 }}</span>
-            </div>
-            <div class="kpi-label">{{ kpi.label }}</div>
+          <div class="text-h4 font-weight-bold mb-1" :style="`color:${kpi.color}`">
+            <template v-if="loading">—</template>
+            <template v-else>{{ stats[kpi.key] ?? 0 }}</template>
           </div>
-          <v-sparkline
-            v-if="kpi.trend?.length"
-            :model-value="kpi.trend"
-            :color="kpi.color"
-            smooth line-width="2"
-            padding="4"
-            height="36"
-            class="kpi-sparkline"
-          />
-        </div>
+          <div class="text-caption text-medium-emphasis">{{ kpi.sub }}</div>
+        </v-card>
       </v-col>
     </v-row>
 
-    <!-- ── Status breakdown ── -->
-    <v-row class="mb-2">
+    <!-- ── Graphiques principaux ─────────────────────────────── -->
+    <v-row class="mb-6">
+
+      <!-- Évolution barres / courbe -->
       <v-col cols="12" md="8">
-        <div class="card h-100">
-          <div class="card-head"><span class="card-title">Répartition par statut</span></div>
-          <div class="card-body">
-            <div v-if="loading" class="text-center py-6">
-              <v-progress-circular indeterminate color="#0F2D5E" size="24" />
-            </div>
-            <div v-else>
-              <div v-for="s in statusBreakdown" :key="s.key" class="breakdown-row">
-                <div class="d-flex align-center gap-2" style="min-width:130px">
-                  <v-icon size="16" :color="s.color">{{ s.icon }}</v-icon>
-                  <span class="breakdown-label">{{ s.label }}</span>
-                </div>
-                <div class="breakdown-bar-wrap">
-                  <div class="breakdown-bar"
-                    :style="{ width: barWidth(s.count) + '%', background: s.color }" />
-                </div>
-                <span class="breakdown-count">{{ s.count }}</span>
+        <v-card elevation="2" rounded="xl" class="pa-5">
+          <div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-2">
+            <div>
+              <div class="text-subtitle-1 font-weight-bold">
+                Évolution des réclamations
               </div>
-              <div v-if="!statusBreakdown.some(s => s.count > 0)" class="text-center py-4" style="font-size:13px;color:#9CA3AF">
-                Aucune réclamation pour le moment.
+              <div class="text-caption text-medium-emphasis">
+                Activité sur les 6 derniers mois
               </div>
             </div>
+            <v-btn-group density="compact" rounded="lg" variant="outlined" color="primary">
+              <v-btn
+                size="small"
+                :variant="chartType === 'bar' ? 'elevated' : 'outlined'"
+                @click="switchChart('bar')"
+              >Barres</v-btn>
+              <v-btn
+                size="small"
+                :variant="chartType === 'line' ? 'elevated' : 'outlined'"
+                @click="switchChart('line')"
+              >Courbe</v-btn>
+            </v-btn-group>
           </div>
-        </div>
+
+          <!-- Skeleton pendant le chargement -->
+          <div v-if="loading" class="chart-skeleton d-flex align-end gap-2 px-4">
+            <div
+              v-for="i in 6" :key="i"
+              class="skeleton-bar"
+              :style="`height:${[60,120,80,160,100,180][i-1]}px`"
+            />
+          </div>
+
+          <!-- Graphique ApexCharts -->
+          <apexchart
+            v-else
+            :key="'evo-' + chartType"
+            :type="chartType"
+            height="280"
+            :options="evolutionOptions"
+            :series="evolutionSeries"
+          />
+        </v-card>
       </v-col>
 
+      <!-- Donut répartition statut -->
       <v-col cols="12" md="4">
-        <div class="card h-100">
-          <div class="card-head"><span class="card-title">Répartition par type</span></div>
-          <div class="card-body">
-            <div v-if="loading" class="text-center py-6">
-              <v-progress-circular indeterminate color="#0F2D5E" size="24" />
-            </div>
-            <div v-else class="d-flex flex-column gap-3">
-              <div v-for="t in typeBreakdown" :key="t.key" class="type-item">
-                <div class="d-flex justify-space-between mb-1">
-                  <span class="type-label">{{ t.label }}</span>
-                  <span class="type-count">{{ t.count }}</span>
-                </div>
-                <v-progress-linear
-                  :model-value="typePercent(t.count)"
-                  :color="t.color"
-                  height="6"
-                  rounded
-                  bg-color="#F3F4F6"
+        <v-card elevation="2" rounded="xl" class="pa-5">
+          <div class="text-subtitle-1 font-weight-bold mb-1">Répartition</div>
+          <div class="text-caption text-medium-emphasis mb-3">Par statut</div>
+
+          <div v-if="loading" class="d-flex justify-center py-8">
+            <v-progress-circular indeterminate color="primary" size="80" />
+          </div>
+
+          <template v-else>
+            <apexchart
+              :key="'donut-' + donutSeries.join('-')"
+              type="donut"
+              height="200"
+              :options="donutOptions"
+              :series="donutSeries"
+            />
+
+            <!-- Légende personnalisée -->
+            <v-divider class="my-3" />
+            <div
+              v-for="item in donutLegend"
+              :key="item.label"
+              class="d-flex align-center justify-space-between py-1"
+            >
+              <div class="d-flex align-center gap-2">
+                <span
+                  class="legend-dot"
+                  :style="`background:${item.color}`"
                 />
+                <span class="text-body-2">{{ item.label }}</span>
+              </div>
+              <div class="d-flex align-center gap-3">
+                <span class="text-body-2 font-weight-bold">{{ item.count }}</span>
+                <v-chip size="x-small" :color="item.color" variant="tonal">
+                  {{ item.pct }}%
+                </v-chip>
               </div>
             </div>
-          </div>
-        </div>
+          </template>
+        </v-card>
       </v-col>
     </v-row>
 
-    <!-- ── Recent reclamations ── -->
+    <!-- ── Ligne du bas ───────────────────────────────────────── -->
     <v-row>
-      <v-col cols="12">
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">Réclamations récentes</span>
-            <v-btn variant="text" size="x-small" color="#0F2D5E"
-              :to="{ name: 'admin.reclamations' }">
-              Voir toutes
-              <v-icon end size="14">mdi-arrow-right</v-icon>
+
+      <!-- Répartition par type -->
+      <v-col cols="12" md="5">
+        <v-card elevation="2" rounded="xl" class="pa-5 h-100">
+          <div class="text-subtitle-1 font-weight-bold mb-1">Répartition par type</div>
+          <div class="text-caption text-medium-emphasis mb-4">
+            Devoir · Examen · Rattrapage
+          </div>
+
+          <div v-if="loading">
+            <v-skeleton-loader type="list-item-two-line" v-for="i in 3" :key="i" />
+          </div>
+
+          <template v-else-if="typeBreakdown.length">
+            <div
+              v-for="item in typeBreakdown"
+              :key="item.key"
+              class="mb-5"
+            >
+              <div class="d-flex justify-space-between align-center mb-1">
+                <div class="d-flex align-center gap-2">
+                  <v-icon size="16" :color="item.color">{{ item.icon }}</v-icon>
+                  <span class="text-body-2 font-weight-medium">{{ item.label }}</span>
+                </div>
+                <span class="text-body-2">
+                  <strong>{{ item.count }}</strong>
+                  <span class="text-caption text-medium-emphasis ml-1">({{ item.pct }}%)</span>
+                </span>
+              </div>
+              <v-progress-linear
+                :model-value="item.pct"
+                :color="item.color"
+                height="8"
+                rounded
+                bg-color="grey-lighten-3"
+              />
+            </div>
+          </template>
+
+          <div v-else class="text-center text-medium-emphasis py-8">
+            <v-icon size="40" class="mb-2 opacity-40">mdi-chart-bar</v-icon>
+            <p class="text-body-2">Aucune donnée disponible</p>
+          </div>
+        </v-card>
+      </v-col>
+
+      <!-- Réclamations récentes -->
+      <v-col cols="12" md="7">
+        <v-card elevation="2" rounded="xl" class="h-100">
+          <div class="d-flex align-center justify-space-between pa-5 pb-3">
+            <div>
+              <div class="text-subtitle-1 font-weight-bold">
+                Réclamations récentes
+              </div>
+              <div class="text-caption text-medium-emphasis">
+                Les 5 dernières soumissions
+              </div>
+            </div>
+            <v-btn
+              size="small"
+              variant="tonal"
+              color="primary"
+              prepend-icon="mdi-arrow-right"
+              to="/admin/reclamations"
+            >
+              Voir tout
             </v-btn>
           </div>
-          <div class="card-body pa-0">
-            <div v-if="loading" class="text-center py-8">
-              <v-progress-circular indeterminate color="#0F2D5E" size="24" />
-            </div>
-            <template v-else>
-              <div v-if="!recent.length" class="empty-state">
-                <v-icon size="32" color="#D1D5DB">mdi-inbox-outline</v-icon>
-                <p>Aucune réclamation récente</p>
-              </div>
-              <div v-else>
-                <div class="recent-header">
-                  <span>Référence</span>
-                  <span>Étudiant</span>
-                  <span>Module</span>
-                  <span>Type</span>
-                  <span>Date</span>
-                  <span>Statut</span>
-                  <span></span>
-                </div>
-                <div v-for="r in recent" :key="r.id" class="recent-row">
-                  <span class="ref-code">{{ r.reference ?? r.reference_number ?? `#${r.id}` }}</span>
-                  <span>
-                    <div class="d-flex align-center gap-2">
-                      <v-avatar size="28" :color="avatarColor(sName(r))" style="flex-shrink:0">
-                        <span style="font-size:10px;font-weight:700;color:white">{{ initials(sName(r)) }}</span>
-                      </v-avatar>
-                      <span style="font-size:13px;font-weight:500;color:#111827">{{ sName(r) }}</span>
-                    </div>
-                  </span>
-                  <span style="font-size:13px;color:#374151">{{ r.module?.name ?? '—' }}</span>
-                  <span>
-                    <v-chip size="x-small" :color="typeColor(r.type)" variant="tonal">
-                      {{ typeLabel(r.type) }}
-                    </v-chip>
-                  </span>
-                  <span style="font-size:12px;color:#6B7280">{{ fDate(r.created_at) }}</span>
-                  <span>
-                    <span class="status-chip" :style="statusStyle(r.status)">{{ statusLabel(r.status) }}</span>
-                  </span>
-                  <span>
-                    <v-btn size="x-small" icon="mdi-eye-outline" variant="text" color="#6B7280"
-                      :to="{ name: 'admin.reclamation.detail', params: { id: r.id } }" />
-                  </span>
-                </div>
-              </div>
-            </template>
+          <v-divider />
+
+          <!-- Skeleton -->
+          <div v-if="loading" class="pa-2">
+            <v-skeleton-loader
+              v-for="i in 5" :key="i"
+              type="list-item-avatar-two-line"
+            />
           </div>
-        </div>
+
+          <!-- Liste -->
+          <v-list v-else-if="recent.length" lines="two" class="py-0">
+            <template v-for="(r, i) in recent" :key="r.id">
+              <v-list-item class="py-3 px-5">
+                <template #prepend>
+                  <v-avatar
+                    :color="avatarColor(r.student_name)"
+                    size="40"
+                    class="mr-3 text-white"
+                  >
+                    <span class="text-caption font-weight-bold">
+                      {{ initials(r.student_name) }}
+                    </span>
+                  </v-avatar>
+                </template>
+
+                <v-list-item-title class="text-body-2 font-weight-medium">
+                  {{ r.reference_number || '—' }}
+                  <span class="text-caption text-medium-emphasis ml-1">
+                    · {{ r.student_name || '—' }}
+                  </span>
+                </v-list-item-title>
+                <v-list-item-subtitle class="text-caption mt-1">
+                  <v-icon size="12" class="mr-1">mdi-book-outline</v-icon>
+                  {{ r.module_name || '—' }}
+                  <span class="mx-1">·</span>
+                  <v-icon size="12" class="mr-1">mdi-calendar</v-icon>
+                  {{ fDate(r.created_at) }}
+                </v-list-item-subtitle>
+
+                <template #append>
+                  <v-chip
+                    size="x-small"
+                    :color="statusColor(r.status)"
+                    variant="tonal"
+                    label
+                  >
+                    {{ statusLabel(r.status) }}
+                  </v-chip>
+                </template>
+              </v-list-item>
+              <v-divider v-if="i < recent.length - 1" inset />
+            </template>
+          </v-list>
+
+          <!-- Vide -->
+          <div v-else class="text-center py-12 text-medium-emphasis">
+            <v-icon size="48" class="mb-3 opacity-30">mdi-inbox-outline</v-icon>
+            <p class="text-body-2">Aucune réclamation récente</p>
+          </div>
+        </v-card>
       </v-col>
     </v-row>
 
@@ -166,140 +286,322 @@
 import { ref, computed, onMounted } from 'vue'
 import api from '@/api/axios'
 
-// ─── State ────────────────────────────────────────────────────
-const loading = ref(false)
-const stats   = ref({})
-const recent  = ref([])
+// ── State ──────────────────────────────────────────────────
+const loading   = ref(true)
+const chartType = ref('bar')
+const stats     = ref({
+  total: 0, pending: 0, in_progress: 0,
+  resolved: 0, rejected: 0,
+  by_status: {}, by_type: {},
+})
+const recent    = ref([])
+const evolution = ref([])
 
-// ─── Maps ─────────────────────────────────────────────────────
-const STATUS_MAP = {
-  submitted: { label: 'Soumises',   color: '#2563EB', icon: 'mdi-send-outline'              },
-  received:  { label: 'Reçues',     color: '#0369A1', icon: 'mdi-inbox-arrow-down-outline'  },
-  in_review: { label: 'En cours',   color: '#7C3AED', icon: 'mdi-magnify'                   },
-  escalated: { label: 'Escaladées', color: '#EA580C', icon: 'mdi-arrow-up-circle-outline'   },
-  resolved:  { label: 'Résolues',   color: '#16A34A', icon: 'mdi-check-circle-outline'      },
-  rejected:  { label: 'Rejetées',   color: '#DC2626', icon: 'mdi-close-circle-outline'      },
-}
-
-const TYPE_MAP = {
-  cc:         { label: 'Contrôle Continu', color: '#2563EB' },
-  controle:   { label: 'Contrôle Continu', color: '#2563EB' },
-  examen:     { label: 'Examen',           color: '#7C3AED' },
-  rattrapage: { label: 'Rattrapage',       color: '#EA580C' },
-}
-
-const AVATAR_COLORS = ['#0F2D5E','#2563EB','#16A34A','#D97706','#DC2626','#7C3AED']
-
-// ─── KPI cards config ─────────────────────────────────────────
+// ── KPI config ─────────────────────────────────────────────
 const kpiCards = [
-  { key: 'total',       label: 'Total réclamations', icon: 'mdi-file-document-multiple-outline', color: '#0F2D5E', trend: [5,8,12,9,15,11,18] },
-  { key: 'pending',     label: 'En attente',         icon: 'mdi-clock-outline',                  color: '#D97706', trend: [3,5,4,7,6,8,5]  },
-  { key: 'in_progress', label: 'En cours',           icon: 'mdi-progress-clock',                 color: '#7C3AED', trend: [1,2,3,4,3,5,6]  },
-  { key: 'resolved',    label: 'Résolues',           icon: 'mdi-check-circle-outline',           color: '#16A34A', trend: [0,1,2,1,3,4,5]  },
+  {
+    key:   'total',
+    label: 'Total réclamations',
+    icon:  'mdi-file-document-multiple-outline',
+    color: '#1976D2',
+    sub:   'Toutes périodes confondues',
+  },
+  {
+    key:   'pending',
+    label: 'En attente',
+    icon:  'mdi-clock-alert-outline',
+    color: '#FF9800',
+    sub:   'submitted + received',
+  },
+  {
+    key:   'in_progress',
+    label: 'En traitement',
+    icon:  'mdi-progress-clock',
+    color: '#9C27B0',
+    sub:   'in_review + escalated',
+  },
+  {
+    key:   'resolved',
+    label: 'Résolues',
+    icon:  'mdi-check-circle-outline',
+    color: '#4CAF50',
+    sub:   'Clôturées avec succès',
+  },
 ]
 
-// ─── Computed breakdowns ──────────────────────────────────────
-const statusBreakdown = computed(() =>
-  Object.entries(STATUS_MAP).map(([key, { label, color, icon }]) => ({
-    key, label, color, icon,
-    count: stats.value?.by_status?.[key] ?? 0,
-  }))
+// ── Statut config ──────────────────────────────────────────
+const STATUS = {
+  submitted: { label: 'Soumise',   color: '#FF9800' },
+  received:  { label: 'Reçue',     color: '#2196F3' },
+  in_review: { label: 'En cours',  color: '#9C27B0' },
+  escalated: { label: 'Escaladée', color: '#FF5722' },
+  resolved:  { label: 'Résolue',   color: '#4CAF50' },
+  rejected:  { label: 'Rejetée',   color: '#F44336' },
+}
+
+const TYPE_CONFIG = {
+  controle:   { label: 'Devoir',  icon: 'mdi-pencil-outline',  color: '#1976D2' },
+  examen:     { label: 'Examen final',      icon: 'mdi-school-outline',  color: '#7B1FA2' },
+  rattrapage: { label: 'Rattrapage',        icon: 'mdi-refresh-circle',  color: '#F57C00' },
+}
+
+// ── Chart type switch ──────────────────────────────────────
+function switchChart(type) {
+  chartType.value = type
+}
+
+// ── ApexCharts : évolution ─────────────────────────────────
+const evolutionSeries = computed(() => [{
+  name: 'Réclamations',
+  data: evolution.value.map(e => e.count),
+}])
+
+const evolutionOptions = computed(() => ({
+  chart: {
+    type:        chartType.value,
+    toolbar:     { show: false },
+    zoom:        { enabled: false },
+    fontFamily:  'inherit',
+    background:  'transparent',
+    animations:  { enabled: true, speed: 600 },
+  },
+  colors:      ['#1976D2'],
+  xaxis: {
+    categories:  evolution.value.map(e => e.month),
+    axisBorder:  { show: false },
+    axisTicks:   { show: false },
+    labels:      { style: { colors: '#888', fontSize: '12px' } },
+  },
+  yaxis: {
+    min:         0,
+    tickAmount:  4,
+    labels: {
+      formatter: v => Math.round(v),
+      style:     { colors: '#888', fontSize: '12px' },
+    },
+  },
+  grid: {
+    borderColor:     '#f0f0f0',
+    strokeDashArray: 4,
+    xaxis:           { lines: { show: false } },
+    padding:         { left: 0, right: 0 },
+  },
+  plotOptions: {
+    bar: {
+      borderRadius:  6,
+      columnWidth:   '45%',
+    },
+  },
+  stroke: {
+    curve: 'smooth',
+    width: chartType.value === 'line' ? 3 : 0,
+  },
+  fill: {
+    type:     chartType.value === 'line' ? 'gradient' : 'solid',
+    gradient: {
+      shade:       'light',
+      type:        'vertical',
+      opacityFrom: 0.5,
+      opacityTo:   0.05,
+    },
+  },
+  markers: {
+    size:        chartType.value === 'line' ? 5 : 0,
+    strokeWidth: 2,
+    colors:      ['#fff'],
+    strokeColors:['#1976D2'],
+  },
+  dataLabels: { enabled: false },
+  tooltip: {
+    theme: 'light',
+    y:     { formatter: v => `${v} réclamation(s)` },
+  },
+}))
+
+// ── ApexCharts : donut ─────────────────────────────────────
+const DONUT_KEYS = ['submitted','received','in_review','escalated','resolved','rejected']
+
+const activeDonutKeys = computed(() =>
+  DONUT_KEYS.filter(k => (stats.value.by_status?.[k] ?? 0) > 0)
 )
 
-const typeBreakdown = computed(() => [
-  { key: 'controle',   label: 'Contrôle Continu', color: '#2563EB', count: stats.value?.by_type?.controle   ?? stats.value?.by_type?.cc  ?? 0 },
-  { key: 'examen',     label: 'Examen',            color: '#7C3AED', count: stats.value?.by_type?.examen     ?? 0 },
-  { key: 'rattrapage', label: 'Rattrapage',        color: '#EA580C', count: stats.value?.by_type?.rattrapage ?? 0 },
-])
+const donutSeries = computed(() =>
+  activeDonutKeys.value.map(k => Number(stats.value.by_status?.[k] ?? 0))
+)
 
-const maxCount = computed(() => Math.max(1, ...statusBreakdown.value.map(s => s.count)))
-const totalTypes = computed(() => typeBreakdown.value.reduce((a, t) => a + t.count, 0))
+const donutOptions = computed(() => ({
+  chart:  { type: 'donut', toolbar: { show: false }, fontFamily: 'inherit' },
+  labels: activeDonutKeys.value.map(k => STATUS[k]?.label ?? k),
+  colors: activeDonutKeys.value.map(k => STATUS[k]?.color ?? '#999'),
+  legend: { show: false },
+  plotOptions: {
+    pie: {
+      donut: {
+        size: '68%',
+        labels: {
+          show:  true,
+          total: {
+            show:      true,
+            label:     'Total',
+            fontSize:  '13px',
+            color:     '#666',
+            formatter: () => String(stats.value.total ?? 0),
+          },
+        },
+      },
+    },
+  },
+  dataLabels: { enabled: false },
+  stroke:     { width: 2, colors: ['#fff'] },
+  tooltip:    { y: { formatter: v => `${v} réclamation(s)` } },
+}))
 
-const barWidth     = (count) => Math.round((count / maxCount.value) * 100)
-const typePercent  = (count) => totalTypes.value ? Math.round((count / totalTypes.value) * 100) : 0
+// Légende groupée (comme le screenshot)
+const donutLegend = computed(() => {
+  const t  = stats.value.total || 1
+  const bs = stats.value.by_status ?? {}
+  return [
+    {
+      label: 'En attente',
+      color: '#FF9800',
+      count: (bs.submitted ?? 0) + (bs.received ?? 0),
+    },
+    {
+      label: 'En cours',
+      color: '#9C27B0',
+      count: (bs.in_review ?? 0) + (bs.escalated ?? 0),
+    },
+    {
+      label: 'Résolues',
+      color: '#4CAF50',
+      count: bs.resolved ?? 0,
+    },
+    {
+      label: 'Rejetées',
+      color: '#F44336',
+      count: bs.rejected ?? 0,
+    },
+  ]
+    .filter(g => g.count > 0)
+    .map(g => ({
+      ...g,
+      pct: Math.round((g.count / t) * 100),
+    }))
+})
 
-// ─── Helpers ──────────────────────────────────────────────────
-const todayFr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+// ── Computed : types ───────────────────────────────────────
+const typeBreakdown = computed(() => {
+  const byType = stats.value.by_type ?? {}
+  const t      = stats.value.total   || 1
+  return Object.entries(TYPE_CONFIG)
+    .map(([key, cfg]) => ({
+      key,
+      label: cfg.label,
+      icon:  cfg.icon,
+      color: cfg.color,
+      count: byType[key] ?? 0,
+      pct:   stats.value.total > 0
+        ? Math.round(((byType[key] ?? 0) / t) * 100)
+        : 0,
+    }))
+    .filter(i => i.count > 0)
+})
 
-const statusLabel = (s) => STATUS_MAP[s]?.label ?? s ?? '—'
-const statusColor = (s) => STATUS_MAP[s]?.color ?? '#9CA3AF'
-const statusStyle = (s) => {
-  const c = statusColor(s)
-  return {
-    background: c + '18', color: c,
-    border: '1px solid ' + c + '30',
-    borderRadius: '20px', fontSize: '11px',
-    padding: '3px 10px', fontWeight: '600',
-    display: 'inline-block', whiteSpace: 'nowrap',
+// ── Helpers ────────────────────────────────────────────────
+function todayFr() {
+  return new Date().toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  })
+}
+
+function fDate(raw) {
+  if (!raw) return '—'
+  try {
+    return new Date(raw).toLocaleDateString('fr-FR', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    })
+  } catch { return raw }
+}
+
+function statusLabel(s) { return STATUS[s]?.label ?? s }
+function statusColor(s) { return STATUS[s]?.color  ?? 'grey' }
+
+function initials(name) {
+  if (!name) return '?'
+  const parts = name.trim().split(' ').filter(Boolean)
+  return parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.substring(0, 2).toUpperCase()
+}
+
+function avatarColor(name) {
+  const colors = ['indigo','teal','purple','blue','cyan','green','orange','red']
+  if (!name) return 'indigo'
+  return colors[name.charCodeAt(0) % colors.length]
+}
+
+// ── Bâtir les 6 derniers mois ──────────────────────────────
+function buildEvolution(monthly = []) {
+  const now    = new Date()
+  const result = []
+  for (let i = 5; i >= 0; i--) {
+    const d     = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key   = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const label = d.toLocaleDateString('fr-FR', { month: 'short' })
+    const found = monthly.find(m => m.month === key)
+    result.push({
+      month: label.charAt(0).toUpperCase() + label.slice(1, 3),
+      count: Number(found?.count ?? 0),
+    })
   }
+  return result
 }
 
-const typeLabel = (t) => !t ? '—' : (TYPE_MAP[t.toLowerCase()]?.label ?? t)
-const typeColor = (t) => !t ? 'grey' : (TYPE_MAP[t.toLowerCase()]?.color ?? '#9CA3AF')
-
-const avatarColor = (name) => AVATAR_COLORS[(name?.charCodeAt(0) ?? 0) % AVATAR_COLORS.length]
-const initials = (name) => {
-  if (!name || name === '—') return '?'
-  return name.split(' ').filter(Boolean).map(n => n[0]?.toUpperCase() ?? '').slice(0, 2).join('')
-}
-
-const sName = (item) => {
-  const s = item?.student
-  if (!s) return '—'
-  if (s.full_name) return s.full_name
-  const parts = [s.prenom ?? s.first_name ?? '', s.nom ?? s.last_name ?? ''].filter(p => p.trim())
-  if (parts.length) return parts.join(' ')
-  return s.name || '—'
-}
-
-const fDate = (d) => {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-// ─── Data loading ─────────────────────────────────────────────
+// ── Chargement API ─────────────────────────────────────────
 async function load() {
   loading.value = true
   try {
-    // Load stats and recent reclamations in parallel
     const [statsRes, recentRes] = await Promise.all([
-      api.get('/admin/dashboard/stats').catch(() => ({ data: null })),
-      api.get('/admin/reclamations', { params: { page: 1, per_page: 8, sort: 'created_at', order: 'desc' } }),
+      api.get('/admin/dashboard/stats'),
+      api.get('/admin/reclamations', { params: { per_page: 5, page: 1 } }),
     ])
 
-    // Parse stats — handle various response shapes
-    const raw = statsRes.data?.data ?? statsRes.data ?? {}
+    // Stats
+    const d = statsRes.data?.data ?? {}
     stats.value = {
-      total:       raw.total       ?? raw.total_reclamations ?? 0,
-      pending:     raw.pending     ?? (raw.by_status?.submitted ?? 0) + (raw.by_status?.received ?? 0),
-      in_progress: raw.in_progress ?? raw.by_status?.in_review ?? 0,
-      resolved:    raw.resolved    ?? raw.by_status?.resolved   ?? 0,
-      by_status:   raw.by_status   ?? {},
-      by_type:     raw.by_type     ?? {},
+      total:       Number(d.total       ?? 0),
+      pending:     Number(d.pending     ?? 0),
+      in_progress: Number(d.in_progress ?? 0),
+      resolved:    Number(d.resolved    ?? 0),
+      rejected:    Number(d.rejected    ?? 0),
+      by_status:   d.by_status ?? {},
+      by_type:     d.by_type   ?? {},
     }
 
-    // If no stats endpoint exists, compute from recent list
-    if (!statsRes.data) {
-      const items = recentRes.data?.data?.data ?? recentRes.data?.data ?? []
-      const bySt  = {}
-      const byTy  = {}
-      items.forEach(r => {
-        bySt[r.status] = (bySt[r.status] ?? 0) + 1
-        byTy[r.type]   = (byTy[r.type]   ?? 0) + 1
-      })
-      stats.value = {
-        total:       items.length,
-        pending:     (bySt.submitted ?? 0) + (bySt.received ?? 0),
-        in_progress: bySt.in_review ?? 0,
-        resolved:    bySt.resolved  ?? 0,
-        by_status:   bySt,
-        by_type:     byTy,
-      }
-    }
+    // Évolution mensuelle
+    evolution.value = buildEvolution(d.monthly ?? [])
 
-    recent.value = recentRes.data?.data?.data ?? recentRes.data?.data ?? []
+    // Réclamations récentes
+    const raw  = recentRes.data?.data ?? recentRes.data ?? {}
+    const list = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw.data)
+        ? raw.data
+        : []
+
+    recent.value = list.slice(0, 5).map(r => ({
+      id:               r.id,
+      reference_number: r.reference_number ?? null,
+      status:           r.status           ?? 'submitted',
+      created_at:       r.created_at       ?? null,
+      student_name: r.student
+        ? [r.student.first_name, r.student.last_name].filter(Boolean).join(' ')
+        : (r.student_name ?? '—'),
+      module_name: r.module?.name ?? r.module_name ?? '—',
+    }))
+
   } catch (err) {
-    console.error('[Dashboard] load error:', err)
+    console.error('[Dashboard] load error :', err)
   } finally {
     loading.value = false
   }
@@ -309,92 +611,48 @@ onMounted(load)
 </script>
 
 <style scoped>
-.dashboard-page { max-width: 1300px; }
-.page-header { display: flex; align-items: center; justify-content: space-between; }
-.page-title { font-size: 22px; font-weight: 700; color: #111827; margin: 0; }
-.page-sub { font-size: 13px; color: #6B7280; margin: 2px 0 0; text-transform: capitalize; }
-
-/* KPI Cards */
-.kpi-card {
-  background: #fff;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  position: relative;
-  overflow: hidden;
-  min-height: 90px;
+.dashboard-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px;
 }
-.kpi-icon-wrap {
-  width: 44px; height: 44px;
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
+
+/* KPI cards */
+.kpi-card {
+  transition: transform .2s ease, box-shadow .2s ease;
+  cursor: default;
+}
+.kpi-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 28px rgba(0,0,0,.10) !important;
+}
+
+/* Skeleton barres */
+.chart-skeleton {
+  height: 280px;
+  align-items: flex-end;
+  padding-bottom: 8px;
+}
+.skeleton-bar {
+  flex: 1;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, #e0e0e0 0%, #f5f5f5 100%);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .4; }
+}
+
+/* Légende donut */
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
   flex-shrink: 0;
 }
-.kpi-body { flex: 1; }
-.kpi-value { font-size: 28px; font-weight: 700; color: #111827; line-height: 1; }
-.kpi-label { font-size: 12px; color: #6B7280; margin-top: 4px; font-weight: 500; }
-.kpi-sparkline {
-  position: absolute;
-  bottom: 0; right: 0;
-  width: 100px;
-  opacity: .45;
-}
 
-/* General card */
-.card { background: #fff; border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; }
-.card-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #F3F4F6; }
-.card-title { font-size: 14px; font-weight: 600; color: #111827; }
-.card-body { padding: 16px 18px; }
+/* Hauteur égale cartes bas de page */
 .h-100 { height: 100%; }
-
-/* Status breakdown */
-.breakdown-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid #F9FAFB;
-}
-.breakdown-row:last-child { border-bottom: none; }
-.breakdown-label { font-size: 13px; font-weight: 500; color: #374151; }
-.breakdown-bar-wrap { flex: 1; height: 8px; background: #F3F4F6; border-radius: 4px; overflow: hidden; }
-.breakdown-bar { height: 100%; border-radius: 4px; transition: width .5s ease; min-width: 4px; }
-.breakdown-count { font-size: 13px; font-weight: 600; color: #111827; min-width: 28px; text-align: right; }
-
-/* Type breakdown */
-.type-item { }
-.type-label { font-size: 13px; font-weight: 500; color: #374151; }
-.type-count { font-size: 13px; font-weight: 600; color: #111827; }
-
-/* Recent table */
-.recent-header,
-.recent-row {
-  display: grid;
-  grid-template-columns: 150px 1fr 1fr 120px 110px 120px 44px;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 18px;
-}
-.recent-header {
-  background: #F9FAFB;
-  font-size: 11px; font-weight: 600;
-  color: #9CA3AF;
-  text-transform: uppercase;
-  letter-spacing: .4px;
-  border-bottom: 1px solid #F3F4F6;
-}
-.recent-row {
-  border-bottom: 1px solid #F9FAFB;
-  font-size: 13px;
-  transition: background .12s;
-}
-.recent-row:hover { background: #F9FAFB; }
-.recent-row:last-child { border-bottom: none; }
-.ref-code { font-family: monospace; font-size: 12px; font-weight: 700; color: #0F2D5E; }
-.status-chip { display: inline-block; white-space: nowrap; }
-
-/* Empty state */
-.empty-state { text-align: center; padding: 40px; color: #9CA3AF; }
-.empty-state p { font-size: 14px; margin-top: 8px; }
 </style>

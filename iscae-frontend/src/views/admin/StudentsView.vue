@@ -1,281 +1,453 @@
 <template>
-  <div>
+  <div class="students-page">
 
-    <!-- En-tête -->
-    <div class="d-flex align-center justify-space-between mb-5">
+    <!-- ── En-tête ──────────────────────────────────────────── -->
+    <div class="d-flex align-center justify-space-between mb-6 flex-wrap gap-3">
       <div>
-        <h1 style="font-size:20px;font-weight:700;color:#111827;margin:0">Étudiants</h1>
-        <p style="font-size:13px;color:#6B7280;margin:4px 0 0">
-          {{ filtered.length }} étudiant{{ filtered.length > 1 ? 's' : '' }} trouvé{{ filtered.length > 1 ? 's' : '' }}
+        <h1 class="text-h5 font-weight-bold">Gestion des étudiants</h1>
+        <p class="text-body-2 text-medium-emphasis mb-0">
+          {{ meta.total }} étudiant(s) enregistré(s)
         </p>
       </div>
+      <v-btn
+        variant="tonal"
+        color="primary"
+        prepend-icon="mdi-refresh"
+        :loading="loading"
+        @click="load"
+      >
+        Actualiser
+      </v-btn>
     </div>
 
-    <!-- Filtres + Recherche -->
-    <div class="d-flex align-center gap-3 mb-4 flex-wrap">
-      <v-text-field
-        v-model="search"
-        placeholder="Nom, matricule, email..."
-        prepend-inner-icon="mdi-magnify"
-        variant="outlined" density="compact" rounded="lg"
-        hide-details style="max-width:300px"
-        @update:model-value="page = 1"
-      />
-      <v-select
-        v-model="filterFiliere"
-        :items="filiereOptions"
-        placeholder="Toutes les filières"
-        variant="outlined" density="compact" rounded="lg"
-        hide-details style="max-width:200px"
-        clearable
-        @update:model-value="page = 1"
-      />
-      <v-select
-        v-model="filterNiveau"
-        :items="niveauOptions"
-        placeholder="Tous les niveaux"
-        variant="outlined" density="compact" rounded="lg"
-        hide-details style="max-width:180px"
-        clearable
-        @update:model-value="page = 1"
-      />
-    </div>
+    <!-- ── Filtres ───────────────────────────────────────────── -->
+    <v-card elevation="1" rounded="xl" class="mb-4 pa-4">
+      <v-row dense align="center">
+        <!-- Recherche -->
+        <v-col cols="12" md="4">
+          <v-text-field
+            v-model="filters.search"
+            placeholder="Rechercher par nom, matricule, NNI, email…"
+            prepend-inner-icon="mdi-magnify"
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            @update:model-value="debouncedLoad"
+          />
+        </v-col>
 
-    <!-- Table -->
-    <div class="card">
-      <div v-if="loading" class="py-10 text-center">
-        <v-progress-circular indeterminate color="#0F2D5E" size="28" />
+        <!-- Filière -->
+        <v-col cols="12" sm="6" md="2">
+          <v-select
+            v-model="filters.filiere_id"
+            :items="filterData.filieres"
+            item-title="name"
+            item-value="id"
+            label="Filière"
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            @update:model-value="load"
+          />
+        </v-col>
+
+        <!-- Niveau -->
+        <v-col cols="12" sm="6" md="2">
+          <v-select
+            v-model="filters.niveau_id"
+            :items="filterData.niveaux"
+            item-title="label"
+            item-value="id"
+            label="Niveau"
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            @update:model-value="load"
+          />
+        </v-col>
+
+        <!-- Statut -->
+        <v-col cols="12" sm="6" md="2">
+          <v-select
+            v-model="filters.status"
+            :items="statusItems"
+            label="Statut"
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            @update:model-value="load"
+          />
+        </v-col>
+
+        <!-- Année académique -->
+        <v-col cols="12" sm="6" md="2">
+          <v-select
+            v-model="filters.academic_year"
+            :items="filterData.years"
+            label="Année académique"
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            @update:model-value="load"
+          />
+        </v-col>
+      </v-row>
+    </v-card>
+
+    <!-- ── KPI rapide ─────────────────────────────────────────── -->
+    <v-row dense class="mb-4">
+      <v-col cols="6" sm="3" v-for="k in kpis" :key="k.label">
+        <v-card elevation="1" rounded="xl" class="pa-4 text-center">
+          <v-icon :color="k.color" size="28" class="mb-1">{{ k.icon }}</v-icon>
+          <div class="text-h6 font-weight-bold" :style="`color:${k.color}`">
+            {{ loading ? '—' : k.value }}
+          </div>
+          <div class="text-caption text-medium-emphasis">{{ k.label }}</div>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- ── Tableau ───────────────────────────────────────────── -->
+    <v-card elevation="2" rounded="xl">
+      <!-- Skeleton -->
+      <div v-if="loading" class="pa-4">
+        <v-skeleton-loader
+          v-for="i in 8" :key="i"
+          type="table-row"
+          class="mb-1"
+        />
       </div>
 
-      <div v-else-if="filtered.length === 0" class="empty">
-        <v-icon size="44" color="#D1D5DB">mdi-account-off-outline</v-icon>
-        <p>Aucun étudiant trouvé</p>
-      </div>
+      <template v-else>
+        <!-- En-tête tableau -->
+        <v-table hover>
+          <thead>
+            <tr>
+              <th class="text-left" style="width:50px">#</th>
+              <th class="text-left">Étudiant</th>
+              <th class="text-left sortable" @click="setSort('matricule')">
+                Matricule
+                <v-icon size="14" class="ml-1">
+                  {{ sortIcon('matricule') }}
+                </v-icon>
+              </th>
+              <th class="text-left">Filière / Niveau</th>
+              <th class="text-left sortable" @click="setSort('academic_year')">
+                Année
+                <v-icon size="14" class="ml-1">{{ sortIcon('academic_year') }}</v-icon>
+              </th>
+              <th class="text-center">Réclamations</th>
+              <th class="text-center">Statut</th>
+              <th class="text-left sortable" @click="setSort('last_login_at')">
+                Dernière connexion
+                <v-icon size="14" class="ml-1">{{ sortIcon('last_login_at') }}</v-icon>
+              </th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in students" :key="s.id">
+              <!-- # -->
+              <td class="text-medium-emphasis text-caption">{{ s.id }}</td>
 
-      <div v-else>
+              <!-- Étudiant -->
+              <td>
+                <div class="d-flex align-center gap-3 py-2">
+                  <v-avatar :color="avatarColor(s.full_name)" size="38">
+                    <v-img v-if="s.photo_url" :src="s.photo_url" cover />
+                    <span v-else class="text-caption font-weight-bold text-white">
+                      {{ initials(s.full_name) }}
+                    </span>
+                  </v-avatar>
+                  <div>
+                    <div class="text-body-2 font-weight-medium">{{ s.full_name }}</div>
+                    <div class="text-caption text-medium-emphasis">{{ s.email }}</div>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Matricule -->
+              <td>
+                <code class="text-caption bg-surface-variant px-2 py-1 rounded">
+                  {{ s.matricule }}
+                </code>
+              </td>
+
+              <!-- Filière / Niveau -->
+              <td>
+                <div class="text-body-2">{{ s.filiere_name }}</div>
+                <v-chip size="x-small" color="indigo" variant="tonal" class="mt-1">
+                  {{ s.niveau_label }}
+                </v-chip>
+              </td>
+
+              <!-- Année -->
+              <td class="text-body-2">{{ s.academic_year ?? '—' }}</td>
+
+              <!-- Réclamations -->
+              <td class="text-center">
+                <div class="d-flex align-center justify-center gap-1">
+                  <v-chip size="x-small" color="primary" variant="tonal">
+                    {{ s.reclamations_count }} total
+                  </v-chip>
+                  <v-chip
+                    v-if="s.reclamations_open > 0"
+                    size="x-small"
+                    color="warning"
+                    variant="tonal"
+                  >
+                    {{ s.reclamations_open }} ouvert(s)
+                  </v-chip>
+                </div>
+              </td>
+
+              <!-- Statut -->
+              <td class="text-center">
+                <v-chip
+                  size="small"
+                  :color="s.is_active ? 'success' : 'error'"
+                  variant="tonal"
+                  label
+                >
+                  <v-icon start size="12">
+                    {{ s.is_active ? 'mdi-check-circle' : 'mdi-cancel' }}
+                  </v-icon>
+                  {{ s.is_active ? 'Actif' : 'Inactif' }}
+                </v-chip>
+              </td>
+
+              <!-- Dernière connexion -->
+              <td class="text-caption text-medium-emphasis">
+                {{ fDate(s.last_login_at) }}
+              </td>
+
+              <!-- Actions -->
+              <td class="text-center">
+                <v-btn
+                  icon
+                  size="small"
+                  variant="text"
+                  color="primary"
+                  @click="openDetail(s)"
+                >
+                  <v-icon size="18">mdi-eye</v-icon>
+                </v-btn>
+                <v-btn
+                  icon
+                  size="small"
+                  variant="text"
+                  :color="s.is_active ? 'error' : 'success'"
+                  @click="confirmToggle(s)"
+                >
+                  <v-icon size="18">
+                    {{ s.is_active ? 'mdi-account-cancel' : 'mdi-account-check' }}
+                  </v-icon>
+                </v-btn>
+              </td>
+            </tr>
+
+            <!-- Vide -->
+            <tr v-if="!students.length">
+              <td colspan="9" class="text-center py-12 text-medium-emphasis">
+                <v-icon size="48" class="mb-3 d-block opacity-30">mdi-account-search</v-icon>
+                Aucun étudiant trouvé
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+
+        <!-- Pagination -->
+        <div class="d-flex align-center justify-space-between px-4 py-3 border-t">
+          <span class="text-caption text-medium-emphasis">
+            {{ paginationInfo }}
+          </span>
+          <v-pagination
+            v-model="filters.page"
+            :length="meta.last_page"
+            :total-visible="6"
+            density="compact"
+            @update:model-value="load"
+          />
+        </div>
+      </template>
+    </v-card>
+
+    <!-- ══════════════════════════════════════════════════════
+         DIALOG : Détail étudiant
+    ══════════════════════════════════════════════════════ -->
+    <v-dialog v-model="detailDialog" max-width="760" scrollable>
+      <v-card rounded="xl" v-if="selectedStudent">
         <!-- Header -->
-        <div class="tbl-head">
-          <span>Étudiant</span>
-          <span>Matricule</span>
-          <span>Contact</span>
-          <span>Filière</span>
-          <span>Niveau</span>
-          <span>Année</span>
-          <span>Statut</span>
-          <span></span>
-        </div>
-
-        <!-- Rows -->
-        <div
-          v-for="s in paginated" :key="s.id"
-          class="tbl-row"
-          @click="openDetail(s)"
-        >
-          <!-- Étudiant -->
-          <div class="d-flex align-center gap-2">
-            <v-avatar size="32" :color="avatarColor(s.full_name ?? s.name)">
-              <v-img v-if="s.photo_url" :src="s.photo_url" cover />
-              <span v-else style="font-size:11px;font-weight:700;color:white">
-                {{ initials(s.full_name ?? s.name) }}
-              </span>
-            </v-avatar>
-            <div>
-              <div style="font-size:13px;font-weight:600;color:#111827">
-                {{ s.full_name ?? s.name ?? '—' }}
-              </div>
-              <div style="font-size:11px;color:#9CA3AF">
-                {{ s.user?.email ?? s.email ?? '—' }}
-              </div>
-            </div>
-          </div>
-
-          <!-- Matricule -->
-          <span class="ref-code">{{ s.matricule ?? '—' }}</span>
-
-          <!-- Contact -->
-          <div>
-            <div style="font-size:12px;color:#374151">{{ s.phone ?? '—' }}</div>
-            <div style="font-size:11px;color:#9CA3AF">{{ s.cin ?? '' }}</div>
-          </div>
-
-          <!-- Filière -->
-          <div>
-            <span class="chip-filiere">{{ s.filiere?.code ?? s.filiere ?? '—' }}</span>
-            <div style="font-size:11px;color:#9CA3AF;margin-top:2px">
-              {{ s.filiere?.name ?? '' }}
-            </div>
-          </div>
-
-          <!-- Niveau -->
-          <span style="font-size:13px;color:#374151;font-weight:500">
-            {{ s.niveau?.code ?? s.niveau ?? '—' }}
-          </span>
-
-          <!-- Année académique -->
-          <span style="font-size:12px;color:#6B7280">
-            {{ s.academic_year ?? '—' }}
-          </span>
-
-          <!-- Statut compte -->
-          <span>
-            <span
-              class="chip"
-              :style="s.user?.status === 'active' || s.status === 'active'
-                ? { background:'#DCFCE7', color:'#16A34A', border:'1px solid #16A34A30' }
-                : { background:'#FEE2E2', color:'#DC2626', border:'1px solid #DC262630' }"
-            >
-              {{ s.user?.status === 'active' || s.status === 'active' ? 'Actif' : 'Inactif' }}
+        <v-card-title class="pa-6 pb-4 d-flex align-center gap-4">
+          <v-avatar :color="avatarColor(selectedStudent.full_name)" size="56">
+            <v-img v-if="selectedStudent.photo_url" :src="selectedStudent.photo_url" cover />
+            <span v-else class="text-h6 font-weight-bold text-white">
+              {{ initials(selectedStudent.full_name) }}
             </span>
-          </span>
-
-          <!-- Action -->
-          <v-icon size="16" color="#9CA3AF">mdi-chevron-right</v-icon>
-        </div>
-      </div>
-    </div>
-
-    <!-- Pagination -->
-    <div v-if="totalPages > 1" class="d-flex justify-center mt-4">
-      <v-pagination
-        v-model="page"
-        :length="totalPages"
-        size="small" rounded="lg"
-        active-color="#0F2D5E"
-      />
-    </div>
-
-    <!-- ── Dialog détail étudiant ── -->
-    <v-dialog v-model="dialog" max-width="640" scrollable>
-      <v-card v-if="selected" rounded="xl">
-
-        <v-card-title class="d-flex align-center justify-space-between pa-5 pb-3">
-          <span style="font-size:16px;font-weight:700;color:#111827">Fiche Étudiant</span>
-          <v-btn icon size="small" variant="text" @click="dialog = false">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
+          </v-avatar>
+          <div>
+            <div class="text-h6 font-weight-bold">{{ selectedStudent.full_name }}</div>
+            <div class="text-body-2 text-medium-emphasis">{{ selectedStudent.email }}</div>
+          </div>
+          <v-spacer />
+          <v-chip
+            :color="selectedStudent.is_active ? 'success' : 'error'"
+            variant="tonal"
+            size="small"
+          >
+            {{ selectedStudent.is_active ? 'Actif' : 'Inactif' }}
+          </v-chip>
         </v-card-title>
-
         <v-divider />
 
-        <v-card-text class="pa-5">
+        <v-card-text class="pa-6">
+          <v-row dense>
+            <!-- Infos personnelles -->
+            <v-col cols="12">
+              <div class="text-subtitle-2 font-weight-bold mb-3 d-flex align-center gap-2">
+                <v-icon color="primary" size="18">mdi-account</v-icon>
+                Informations personnelles
+              </div>
+            </v-col>
 
-          <!-- Avatar + nom -->
-          <div class="d-flex align-center gap-4 mb-5">
-            <v-avatar size="64" :color="avatarColor(selected.full_name ?? selected.name)">
-              <v-img v-if="selected.photo_url" :src="selected.photo_url" cover />
-              <span v-else style="font-size:20px;font-weight:700;color:white">
-                {{ initials(selected.full_name ?? selected.name) }}
-              </span>
-            </v-avatar>
-            <div>
-              <h2 style="font-size:18px;font-weight:700;color:#111827;margin:0">
-                {{ selected.full_name ?? selected.name ?? '—' }}
-              </h2>
-              <p style="font-size:13px;color:#6B7280;margin:3px 0 0">
-                {{ selected.user?.email ?? selected.email ?? '—' }}
-              </p>
-              <span
-                class="chip mt-2"
-                :style="selected.user?.status === 'active' || selected.status === 'active'
-                  ? { background:'#DCFCE7', color:'#16A34A', border:'1px solid #16A34A30' }
-                  : { background:'#FEE2E2', color:'#DC2626', border:'1px solid #DC262630' }"
-              >
-                {{ selected.user?.status === 'active' || selected.status === 'active' ? 'Compte actif' : 'Compte inactif' }}
-              </span>
-            </div>
-          </div>
+            <v-col cols="6" sm="4" v-for="info in studentInfos" :key="info.label">
+              <div class="info-block pa-3 rounded-lg mb-2">
+                <div class="text-caption text-medium-emphasis mb-1">{{ info.label }}</div>
+                <div class="text-body-2 font-weight-medium">{{ info.value || '—' }}</div>
+              </div>
+            </v-col>
 
-          <!-- Infos académiques -->
-          <div class="section-title">Informations académiques</div>
-          <div class="info-grid mb-4">
-            <div class="info-item">
-              <span class="info-key">Matricule</span>
-              <span class="ref-code">{{ selected.matricule ?? '—' }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-key">Filière</span>
-              <span class="info-val">{{ selected.filiere?.name ?? selected.filiere ?? '—' }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-key">Code filière</span>
-              <span class="info-val">{{ selected.filiere?.code ?? '—' }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-key">Niveau</span>
-              <span class="info-val">{{ selected.niveau?.code ?? selected.niveau ?? '—' }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-key">Année académique</span>
-              <span class="info-val">{{ selected.academic_year ?? '—' }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-key">Groupe</span>
-              <span class="info-val">{{ selected.group ?? selected.groupe ?? '—' }}</span>
-            </div>
-          </div>
+            <!-- Réclamations -->
+            <v-col cols="12" class="mt-4">
+              <div class="text-subtitle-2 font-weight-bold mb-3 d-flex align-center gap-2">
+                <v-icon color="primary" size="18">mdi-file-document-multiple</v-icon>
+                Réclamations ({{ detailReclamations.length }})
+              </div>
+            </v-col>
 
-          <!-- Infos personnelles -->
-          <div class="section-title">Informations personnelles</div>
-          <div class="info-grid mb-4">
-            <div class="info-item">
-              <span class="info-key">CIN</span>
-              <span class="info-val">{{ selected.cin ?? '—' }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-key">Téléphone</span>
-              <span class="info-val">{{ selected.phone ?? '—' }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-key">Date naissance</span>
-              <span class="info-val">{{ fDate(selected.birth_date) }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-key">Ville</span>
-              <span class="info-val">{{ selected.city ?? '—' }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-key">Nationalité</span>
-              <span class="info-val">{{ selected.nationality ?? '—' }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-key">Genre</span>
-              <span class="info-val">{{ selected.gender === 'M' ? 'Masculin' : selected.gender === 'F' ? 'Féminin' : '—' }}</span>
-            </div>
-          </div>
+            <v-col cols="12" v-if="loadingDetail">
+              <v-skeleton-loader type="list-item-two-line" v-for="i in 3" :key="i" />
+            </v-col>
 
-          <!-- Réclamations -->
-          <div class="section-title">
-            Réclamations
-            <span class="section-count">{{ selected.reclamations_count ?? selected.reclamations?.length ?? 0 }}</span>
-          </div>
-          <div v-if="selected.reclamations?.length > 0" class="recl-mini-list">
-            <div
-              v-for="r in selected.reclamations.slice(0, 5)"
-              :key="r.id"
-              class="recl-mini-row"
-            >
-              <div class="dot" :style="{ background: sColor(r.status) }" />
-              <span style="font-size:12px;color:#374151;flex:1">
-                {{ r.reference ?? `#${r.id}` }} — {{ r.subject ?? r.type ?? '—' }}
-              </span>
-              <span class="chip" :style="chipStyle(r.status)">{{ sLabel(r.status) }}</span>
-            </div>
-          </div>
-          <p v-else style="font-size:13px;color:#9CA3AF;margin:0">Aucune réclamation.</p>
+            <v-col cols="12" v-else-if="detailReclamations.length">
+              <v-table density="compact">
+                <thead>
+                  <tr>
+                    <th>Référence</th>
+                    <th>Module</th>
+                    <th>Type</th>
+                    <th>Statut</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="r in detailReclamations" :key="r.id">
+                    <td>
+                      <code class="text-caption">{{ r.reference_number }}</code>
+                    </td>
+                    <td class="text-caption">{{ r.module_name ?? '—' }}</td>
+                    <td>
+                      <v-chip size="x-small" :color="typeColor(r.type)" variant="tonal">
+                        {{ typeLabel(r.type) }}
+                      </v-chip>
+                    </td>
+                    <td>
+                      <v-chip size="x-small" :color="statusColor(r.status)" variant="tonal">
+                        {{ statusLabel(r.status) }}
+                      </v-chip>
+                    </td>
+                    <td class="text-caption">{{ fDate(r.created_at) }}</td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </v-col>
 
+            <v-col cols="12" v-else>
+              <div class="text-center text-medium-emphasis py-6">
+                <v-icon size="32" class="mb-2 opacity-30">mdi-inbox-outline</v-icon>
+                <p class="text-body-2">Aucune réclamation</p>
+              </div>
+            </v-col>
+          </v-row>
         </v-card-text>
 
         <v-divider />
-
         <v-card-actions class="pa-4">
-          <v-spacer />
-          <v-btn variant="outlined" size="small" rounded="lg" @click="dialog = false">
-            Fermer
+          <v-btn
+            :color="selectedStudent.is_active ? 'error' : 'success'"
+            variant="tonal"
+            :loading="togglingStatus"
+            @click="toggleStatus(selectedStudent)"
+          >
+            <v-icon start>
+              {{ selectedStudent.is_active ? 'mdi-account-cancel' : 'mdi-account-check' }}
+            </v-icon>
+            {{ selectedStudent.is_active ? 'Désactiver le compte' : 'Activer le compte' }}
           </v-btn>
+          <v-spacer />
+          <v-btn variant="text" @click="detailDialog = false">Fermer</v-btn>
         </v-card-actions>
-
       </v-card>
     </v-dialog>
+
+    <!-- ══════════════════════════════════════════════════════
+         DIALOG : Confirmation toggle statut
+    ══════════════════════════════════════════════════════ -->
+    <v-dialog v-model="toggleDialog" max-width="420">
+      <v-card rounded="xl" v-if="toggleTarget">
+        <v-card-title class="pa-5">
+          <v-icon :color="toggleTarget.is_active ? 'error' : 'success'" class="mr-2">
+            {{ toggleTarget.is_active ? 'mdi-account-cancel' : 'mdi-account-check' }}
+          </v-icon>
+          {{ toggleTarget.is_active ? 'Désactiver' : 'Activer' }} le compte
+        </v-card-title>
+        <v-card-text class="pa-5 pt-0">
+          <p class="text-body-2 mb-4">
+            Voulez-vous {{ toggleTarget.is_active ? 'désactiver' : 'activer' }} le compte de
+            <strong>{{ toggleTarget.full_name }}</strong> ?
+          </p>
+          <v-textarea
+            v-model="toggleReason"
+            label="Raison (optionnel)"
+            variant="outlined"
+            density="compact"
+            rows="2"
+            hide-details
+          />
+        </v-card-text>
+        <v-card-actions class="pa-4 pt-0">
+          <v-spacer />
+          <v-btn variant="text" @click="toggleDialog = false">Annuler</v-btn>
+          <v-btn
+            :color="toggleTarget.is_active ? 'error' : 'success'"
+            variant="elevated"
+            :loading="togglingStatus"
+            @click="doToggle"
+          >
+            Confirmer
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ── Snackbar ───────────────────────────────────────── -->
+    <v-snackbar
+      v-model="snack.show"
+      :color="snack.color"
+      :timeout="4000"
+      location="bottom right"
+      rounded="lg"
+    >
+      <v-icon class="mr-2">
+        {{ snack.color === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle' }}
+      </v-icon>
+      {{ snack.text }}
+    </v-snackbar>
 
   </div>
 </template>
@@ -284,228 +456,283 @@
 import { ref, computed, onMounted } from 'vue'
 import api from '@/api/axios'
 
-// ── État ──────────────────────────────────────────────────────────────
+// ── State ──────────────────────────────────────────────────
 const loading       = ref(true)
-const list          = ref([])
-const search        = ref('')
-const filterFiliere = ref(null)
-const filterNiveau  = ref(null)
-const page          = ref(1)
-const PER           = 12
-const dialog        = ref(false)
-const selected      = ref(null)
+const loadingDetail = ref(false)
+const togglingStatus = ref(false)
+const students      = ref([])
+const detailReclamations = ref([])
+const filterData    = ref({ filieres: [], niveaux: [], years: [] })
+const meta          = ref({ total: 0, per_page: 15, current_page: 1, last_page: 1 })
+const detailDialog  = ref(false)
+const toggleDialog  = ref(false)
+const selectedStudent = ref(null)
+const toggleTarget  = ref(null)
+const toggleReason  = ref('')
+const snack         = ref({ show: false, text: '', color: 'success' })
 
-// ── Options de filtre ─────────────────────────────────────────────────
-const filiereOptions = computed(() => {
-  const codes = [...new Set(
-    list.value
-      .map(s => s.filiere?.code ?? s.filiere)
-      .filter(Boolean)
-  )]
-  return codes
+// ── Filtres ────────────────────────────────────────────────
+const filters = ref({
+  search:        '',
+  filiere_id:    null,
+  niveau_id:     null,
+  status:        null,
+  academic_year: null,
+  page:          1,
+  per_page:      15,
+  sort:          'created_at',
+  dir:           'desc',
 })
 
-const niveauOptions = computed(() => {
-  const codes = [...new Set(
-    list.value
-      .map(s => s.niveau?.code ?? s.niveau)
-      .filter(Boolean)
-  )]
-  return codes
-})
-
-// ── Filtrage ──────────────────────────────────────────────────────────
-const filtered = computed(() => {
-  let res = list.value
-
-  if (search.value.trim()) {
-    const q = search.value.toLowerCase()
-    res = res.filter(s =>
-      (s.full_name ?? s.name ?? '').toLowerCase().includes(q) ||
-      (s.matricule ?? '').toLowerCase().includes(q) ||
-      (s.user?.email ?? s.email ?? '').toLowerCase().includes(q) ||
-      (s.cin ?? '').toLowerCase().includes(q) ||
-      (s.phone ?? '').includes(q)
-    )
-  }
-
-  if (filterFiliere.value) {
-    res = res.filter(s =>
-      (s.filiere?.code ?? s.filiere) === filterFiliere.value
-    )
-  }
-
-  if (filterNiveau.value) {
-    res = res.filter(s =>
-      (s.niveau?.code ?? s.niveau) === filterNiveau.value
-    )
-  }
-
-  return res
-})
-
-const totalPages = computed(() => Math.ceil(filtered.value.length / PER))
-const paginated  = computed(() =>
-  filtered.value.slice((page.value - 1) * PER, page.value * PER)
-)
-
-// ── Helpers visuels ───────────────────────────────────────────────────
-const COLORS_AVATAR = [
-  '#0F2D5E', '#2563EB', '#16A34A', '#D97706',
-  '#DC2626', '#7C3AED', '#0891B2', '#EA580C',
+const statusItems = [
+  { title: 'Actif',   value: 'active'   },
+  { title: 'Inactif', value: 'inactive' },
 ]
 
-function avatarColor(name) {
-  if (!name) return '#0F2D5E'
-  const i = name.charCodeAt(0) % COLORS_AVATAR.length
-  return COLORS_AVATAR[i]
+// ── Computed ───────────────────────────────────────────────
+const paginationInfo = computed(() => {
+  const { current_page, per_page, total } = meta.value
+  const from = ((current_page - 1) * per_page) + 1
+  const to   = Math.min(current_page * per_page, total)
+  return total > 0 ? `${from}–${to} sur ${total} étudiants` : '0 étudiant'
+})
+
+const kpis = computed(() => [
+  {
+    label: 'Total',
+    value: meta.value.total,
+    icon:  'mdi-account-group',
+    color: '#1976D2',
+  },
+  {
+    label: 'Actifs',
+    value: students.value.filter(s => s.is_active).length,
+    icon:  'mdi-account-check',
+    color: '#4CAF50',
+  },
+  {
+    label: 'Inactifs',
+    value: students.value.filter(s => !s.is_active).length,
+    icon:  'mdi-account-cancel',
+    color: '#F44336',
+  },
+  {
+    label: 'Avec réclamations',
+    value: students.value.filter(s => s.reclamations_count > 0).length,
+    icon:  'mdi-file-document-alert',
+    color: '#FF9800',
+  },
+])
+
+const studentInfos = computed(() => {
+  const s = selectedStudent.value
+  if (!s) return []
+  return [
+    { label: 'Matricule',      value: s.matricule },
+    { label: 'NNI',            value: s.nni },
+    { label: 'Filière',        value: s.filiere_name },
+    { label: 'Niveau',         value: s.niveau_label },
+    { label: 'Année acad.',    value: s.academic_year },
+    { label: 'Téléphone',      value: s.phone },
+    { label: 'Date naissance', value: s.date_naissance },
+    { label: 'Nationalité',    value: s.nationalite },
+    { label: 'Adresse',        value: s.adresse },
+    { label: 'Dernière co.',   value: fDate(s.last_login_at) },
+    { label: 'Inscrit le',     value: fDate(s.created_at) },
+    { label: 'Réclamations',   value: `${s.reclamations_count} (${s.reclamations_open} ouverte(s))` },
+  ]
+})
+
+// ── Helpers ────────────────────────────────────────────────
+function notify(text, color = 'success') {
+  snack.value = { show: true, text, color }
+}
+
+function fDate(raw) {
+  if (!raw) return '—'
+  try {
+    return new Date(raw).toLocaleDateString('fr-FR', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    })
+  } catch { return raw }
 }
 
 function initials(name) {
   if (!name) return '?'
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  const parts = name.trim().split(' ').filter(Boolean)
+  return parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.substring(0, 2).toUpperCase()
 }
 
-const COLORS = {
-  submitted: '#2563EB', in_review: '#D97706',
-  escalated: '#EA580C', resolved:  '#16A34A',
-  rejected:  '#DC2626', closed:    '#9CA3AF',
+function avatarColor(name) {
+  const colors = ['indigo','teal','purple','blue','cyan','green','orange','red','pink']
+  if (!name) return 'indigo'
+  return colors[name.charCodeAt(0) % colors.length]
 }
-const LABELS = {
-  submitted: 'Soumise',   in_review: 'En cours',
-  escalated: 'Escaladée', resolved:  'Résolue',
-  rejected:  'Rejetée',   closed:    'Fermée',
+
+function statusLabel(s) {
+  const m = { submitted:'Soumise', received:'Reçue', in_review:'En cours',
+              escalated:'Escaladée', resolved:'Résolue', rejected:'Rejetée' }
+  return m[s] ?? s
 }
-const sColor    = s => COLORS[s] ?? '#9CA3AF'
-const sLabel    = s => LABELS[s] ?? s ?? '—'
-const chipStyle = s => ({
-  background: sColor(s) + '18', color: sColor(s),
-  border: `1px solid ${sColor(s)}30`,
-  borderRadius: '20px', fontSize: '11px',
-  padding: '2px 8px', fontWeight: '600',
-})
+function statusColor(s) {
+  const m = { submitted:'orange', received:'blue', in_review:'purple',
+              escalated:'deep-orange', resolved:'success', rejected:'error' }
+  return m[s] ?? 'grey'
+}
+function typeLabel(t) {
+  return { controle:'Contrôle', examen:'Examen', rattrapage:'Rattrapage' }[t] ?? t
+}
+function typeColor(t) {
+  return { controle:'blue', examen:'purple', rattrapage:'orange' }[t] ?? 'grey'
+}
 
-const fDate = d => d
-  ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
-  : '—'
-
-// ── Ouverture dialog ──────────────────────────────────────────────────
-async function openDetail(student) {
-  selected.value = student
-  dialog.value   = true
-
-  // Charge les détails complets si pas encore chargés
-  if (!student._loaded) {
-    try {
-      const res      = await api.get(`/admin/students/${student.id}`)
-      const full     = res.data?.data ?? res.data
-      // Fusionne les données
-      Object.assign(student, full, { _loaded: true })
-      selected.value = { ...student }
-    } catch { /* garde les données existantes */ }
+// ── Tri ────────────────────────────────────────────────────
+function setSort(col) {
+  if (filters.value.sort === col) {
+    filters.value.dir = filters.value.dir === 'asc' ? 'desc' : 'asc'
+  } else {
+    filters.value.sort = col
+    filters.value.dir  = 'asc'
   }
+  filters.value.page = 1
+  load()
 }
 
-// ── Chargement ────────────────────────────────────────────────────────
-onMounted(async () => {
+function sortIcon(col) {
+  if (filters.value.sort !== col) return 'mdi-unfold-more-horizontal'
+  return filters.value.dir === 'asc' ? 'mdi-arrow-up' : 'mdi-arrow-down'
+}
+
+// ── Debounce recherche ─────────────────────────────────────
+let debounceTimer = null
+function debouncedLoad() {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    filters.value.page = 1
+    load()
+  }, 400)
+}
+
+// ── Chargement liste ───────────────────────────────────────
+async function load() {
+  loading.value = true
   try {
-    const res  = await api.get('/admin/students')
-    list.value = res.data?.data ?? []
-  } catch {
-    list.value = []
+    const params = {
+      page:          filters.value.page,
+      per_page:      filters.value.per_page,
+      sort:          filters.value.sort,
+      dir:           filters.value.dir,
+    }
+    if (filters.value.search)        params.search        = filters.value.search
+    if (filters.value.filiere_id)    params.filiere_id    = filters.value.filiere_id
+    if (filters.value.niveau_id)     params.niveau_id     = filters.value.niveau_id
+    if (filters.value.status)        params.status        = filters.value.status
+    if (filters.value.academic_year) params.academic_year = filters.value.academic_year
+
+    const res = await api.get('/admin/students', { params })
+    const d   = res.data
+
+    students.value  = d.data    ?? []
+    meta.value      = d.meta    ?? meta.value
+
+    // Listes filtres (chargées une seule fois)
+    if (d.filters) {
+      filterData.value = {
+        filieres: d.filters.filieres ?? [],
+        niveaux:  d.filters.niveaux  ?? [],
+        years:    d.filters.years    ?? [],
+      }
+    }
+  } catch (err) {
+    console.error('[StudentsView] load error', err)
+    notify('Impossible de charger les étudiants.', 'error')
   } finally {
     loading.value = false
   }
-})
+}
+
+// ── Ouvrir détail ──────────────────────────────────────────
+async function openDetail(student) {
+  selectedStudent.value    = student
+  detailReclamations.value = []
+  detailDialog.value       = true
+  loadingDetail.value      = true
+  try {
+    const res = await api.get(`/admin/students/${student.id}`)
+    const d   = res.data?.data ?? {}
+    // Fusionner les données enrichies
+    selectedStudent.value    = { ...student, ...d }
+    detailReclamations.value = d.reclamations ?? []
+  } catch (err) {
+    console.error('[StudentsView] detail error', err)
+  } finally {
+    loadingDetail.value = false
+  }
+}
+
+// ── Toggle statut ──────────────────────────────────────────
+function confirmToggle(student) {
+  toggleTarget.value = student
+  toggleReason.value = ''
+  toggleDialog.value = true
+}
+
+async function doToggle() {
+  if (!toggleTarget.value) return
+  await toggleStatus(toggleTarget.value)
+  toggleDialog.value = false
+}
+
+async function toggleStatus(student) {
+  togglingStatus.value = true
+  try {
+    await api.put(`/admin/students/${student.id}/status`, {
+      is_active: !student.is_active,
+      reason:    toggleReason.value || null,
+    })
+    const label = !student.is_active ? 'activé' : 'désactivé'
+    notify(`Compte ${label} avec succès.`)
+    // Mettre à jour localement
+    const idx = students.value.findIndex(s => s.id === student.id)
+    if (idx !== -1) students.value[idx].is_active = !student.is_active
+    if (selectedStudent.value?.id === student.id) {
+      selectedStudent.value.is_active = !student.is_active
+    }
+  } catch (err) {
+    const msg = err.response?.data?.message ?? 'Erreur lors de la mise à jour.'
+    notify(msg, 'error')
+  } finally {
+    togglingStatus.value = false
+  }
+}
+
+// ── Lifecycle ──────────────────────────────────────────────
+onMounted(load)
 </script>
 
 <style scoped>
-.card { background:#fff; border:1px solid #E5E7EB; border-radius:12px; overflow:hidden; }
-.empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:40px; color:#9CA3AF; font-size:13px; }
-
-.tbl-head {
-  display: grid;
-  grid-template-columns: 220px 110px 130px 140px 80px 100px 80px 40px;
-  padding: 10px 18px;
-  background: #F9FAFB;
-  border-bottom: 1px solid #E5E7EB;
-  font-size: 11px; font-weight: 600;
-  color: #9CA3AF; text-transform: uppercase; letter-spacing: .5px;
+.students-page {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 24px 16px;
 }
 
-.tbl-row {
-  display: grid;
-  grid-template-columns: 220px 110px 130px 140px 80px 100px 80px 40px;
-  padding: 13px 18px;
-  border-bottom: 1px solid #F3F4F6;
-  align-items: center;
+.sortable {
   cursor: pointer;
-  transition: background .12s;
+  user-select: none;
 }
-.tbl-row:last-child { border-bottom: none; }
-.tbl-row:hover      { background: #F8FAFC; }
-
-.ref-code {
-  font-family: monospace;
-  font-size: 12px; font-weight: 600; color: #0F2D5E;
+.sortable:hover {
+  color: rgb(var(--v-theme-primary));
 }
 
-.chip {
-  font-size: 11px; font-weight: 600;
-  padding: 2px 9px; border-radius: 20px;
-  display: inline-block; white-space: nowrap;
+.info-block {
+  background: rgba(var(--v-theme-surface-variant), .5);
+  border: 1px solid rgba(var(--v-theme-on-surface), .06);
 }
 
-.chip-filiere {
-  font-size: 11px; font-weight: 700;
-  padding: 2px 8px; border-radius: 6px;
-  background: #DBEAFE; color: #1D4ED8;
-  display: inline-block;
-}
-
-/* Dialog */
-.section-title {
-  font-size: 12px; font-weight: 700;
-  color: #6B7280; text-transform: uppercase;
-  letter-spacing: .6px; margin-bottom: 10px;
-  display: flex; align-items: center; gap: 6px;
-}
-.section-count {
-  background: #F3F4F6; color: #374151;
-  font-size: 11px; padding: 1px 7px;
-  border-radius: 10px; font-weight: 600;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.info-item {
-  display: flex; flex-direction: column;
-  gap: 2px; padding: 10px 12px;
-  background: #F9FAFB; border-radius: 8px;
-  border: 1px solid #F3F4F6;
-}
-
-.info-key {
-  font-size: 11px; font-weight: 600;
-  color: #9CA3AF; text-transform: uppercase; letter-spacing: .4px;
-}
-
-.info-val {
-  font-size: 13px; font-weight: 500; color: #111827;
-}
-
-.recl-mini-list { display: flex; flex-direction: column; gap: 6px; }
-.recl-mini-row  {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px; background: #F9FAFB;
-  border-radius: 8px; border: 1px solid #F3F4F6;
-}
-.dot {
-  width: 7px; height: 7px;
-  border-radius: 50%; flex-shrink: 0;
+.border-t {
+  border-top: 1px solid rgba(var(--v-theme-on-surface), .08);
 }
 </style>
