@@ -16,10 +16,15 @@
 
       <!-- ── Logo ── -->
       <div class="drawer-logo" :class="{ 'logo-collapsed': rail && !mobile }">
-        <div class="logo-icon-wrap">
+        <div class="logo-wrapper">
+  <img
+    src="https://th.bing.com/th/id/R.bb2cf5d4b7c5c26926598d033caa12d5?rik=qVW4UwQbTi2FBw&riu=http%3a%2f%2fiscae.mr%2fsites%2fdefault%2ffiles%2flogo-iscae.png&ehk=YA1xYsCRE3ywccmaupnq14KGVjvhrs1pJQdhphtJE%2bs%3d&risl=&pid=ImgRaw&r=0"
+    alt="Logo ISCAE"
+    class="logo-img"
+    draggable="false"
+  />
+</div>
 
-          <v-icon size="20" color="white">mdi-shield-account</v-icon>
-        </div>
         <transition name="logo-slide">
           <div v-if="!rail || mobile" class="logo-texts">
             <span class="logo-app">ISCAE</span>
@@ -386,17 +391,41 @@ watch(mobile, v => {
   justify-content: center;
   padding: 22px 8px 18px;
 }
-.logo-icon-wrap {
-  width: 36px;
-  height: 36px;
-  background: rgba(255,255,255,.15);
-  border-radius: 10px;
+/* ── Logo wrapper : cercle blanc fixe ── */
+.logo-wrapper {
+  flex-shrink: 0;
+  width: 46px !important;
+  height: 46px !important;
+  min-width: 46px !important;
+  min-height: 46px !important;
+  border-radius: 50%;
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  transition: background .2s;
+  overflow: hidden;           /* ← coupe tout ce qui dépasse */
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.25), 0 4px 16px rgba(0,0,0,0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+
+.logo-wrapper:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.45), 0 6px 22px rgba(0,0,0,0.45);
+}
+
+/* ── Image contrainte dans le cercle ── */
+.logo-img {
+  width: 42px !important;
+  height: 42px !important;
+  max-width: 42px !important;
+  max-height: 42px !important;
+  object-fit: contain;        /* ← garde les proportions */
+  border-radius: 50%;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
 .logo-icon-wrap:hover { background: rgba(255,255,255,.25); }
 .logo-texts {
   display: flex;
