@@ -33,10 +33,10 @@ Route::prefix('v1')->group(function () {
     Route::prefix('auth')->group(function () {
 
         // ── Inscription (3 étapes) ─────────────────────────────────
-        Route::post('verify-identity', [AuthController::class, 'verifyPreloaded']);  // Étape 1
-        Route::post('verify-otp',      [AuthController::class, 'verifyOtp']);        // Étape 2
-        Route::post('register',        [AuthController::class, 'register']);         // Étape 3
-        Route::post('send-otp', [AuthController::class, 'sendOtp']);
+        Route::post('verify-identity', [AuthController::class, 'verifyPreloaded']); // Étape 1
+        Route::post('send-otp',        [AuthController::class, 'sendOtp']);         // Envoi OTP
+        Route::post('verify-otp',      [AuthController::class, 'verifyOtp']);       // Étape 2
+        Route::post('register',        [AuthController::class, 'register']);        // Étape 3
 
         // ── Connexion ──────────────────────────────────────────────
         Route::post('login', [AuthController::class, 'login']);
@@ -47,8 +47,10 @@ Route::prefix('v1')->group(function () {
             Route::post('resend', [AuthController::class, 'resendOtp']);
         });
 
-        // ── Mot de passe oublié ────────────────────────────────────
-        Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
+        // ── Mot de passe oublié (3 étapes) ────────────────────────
+        Route::post('forgot-password',            [AuthController::class, 'forgotPassword']);   // Étape 1
+        Route::post('forgot-password/verify-otp', [AuthController::class, 'forgotVerifyOtp']); // Étape 2
+        Route::post('reset-password',             [AuthController::class, 'resetPassword']);    // Étape 3
 
         // ── Routes protégées ───────────────────────────────────────
         Route::middleware('auth:sanctum')->group(function () {
@@ -152,9 +154,12 @@ Route::prefix('v1')->group(function () {
         Route::delete('modules/{id}', [AdminSemestre::class, 'moduleDestroy'])->name('modules.destroy');
 
         // ── Étudiants ──────────────────────────────────────────────
-        Route::get('students',             [AdminStudent::class, 'index']       )->name('students.index');
-        Route::get('students/{id}',        [AdminStudent::class, 'show']        )->name('students.show');
-        Route::put('students/{id}/status', [AdminStudent::class, 'updateStatus'])->name('students.update-status');
+        Route::get   ('students',             [AdminStudent::class, 'index']       )->name('students.index');
+        Route::post  ('students',             [AdminStudent::class, 'store']       )->name('students.store');
+        Route::get   ('students/{id}',        [AdminStudent::class, 'show']        )->name('students.show');
+        Route::put   ('students/{id}',        [AdminStudent::class, 'update']      )->name('students.update');
+        Route::put   ('students/{id}/status', [AdminStudent::class, 'updateStatus'])->name('students.update-status');
+        Route::delete('students/{id}',        [AdminStudent::class, 'destroy']     )->name('students.destroy');
 
         // ── Notes ──────────────────────────────────────────────────
         Route::get('notes',      [AdminNote::class, 'index'])->name('notes.index');
@@ -195,7 +200,6 @@ Route::prefix('v1')->group(function () {
 
     });
 
-    
     // ══════════════════════════════════════════════════════════════════
     // STUDENT
     // ══════════════════════════════════════════════════════════════════
@@ -259,11 +263,11 @@ Route::prefix('v1')->group(function () {
         Route::put ('reclamations/{id}', [StudentReclamation::class, 'update'])->name('reclamations.update');
 
         // ── Notifications (ordre critique : statiques avant {id}) ──
-        Route::get  ('notifications',           [StudentNotification::class, 'index']      )->name('notifications.index');
-        Route::get  ('notifications/counts',    [StudentNotification::class, 'counts']     )->name('notifications.counts');
-        Route::put  ('notifications/read-all',  [StudentNotification::class, 'markAllRead'])->name('notifications.read-all');
-        Route::put  ('notifications/{id}/read', [StudentNotification::class, 'markAsRead'] )->name('notifications.read');
-        Route::delete('notifications/{id}',     [StudentNotification::class, 'destroy']    )->name('notifications.destroy');
+        Route::get   ('notifications',           [StudentNotification::class, 'index']      )->name('notifications.index');
+        Route::get   ('notifications/counts',    [StudentNotification::class, 'counts']     )->name('notifications.counts');
+        Route::put   ('notifications/read-all',  [StudentNotification::class, 'markAllRead'])->name('notifications.read-all');
+        Route::put   ('notifications/{id}/read', [StudentNotification::class, 'markAsRead'] )->name('notifications.read');
+        Route::delete('notifications/{id}',      [StudentNotification::class, 'destroy']    )->name('notifications.destroy');
 
         // ── Profil étudiant ────────────────────────────────────────
         Route::get ('profile',          [StudentProfile::class, 'show']          )->name('profile.show');
@@ -277,15 +281,6 @@ Route::prefix('v1')->group(function () {
         // ── Documents ──────────────────────────────────────────────
         Route::get('documents',      [StudentDocument::class, 'index'])->name('documents.index');
         Route::get('documents/{id}', [StudentDocument::class, 'show'] )->name('documents.show');
-
-
-        // ── Étudiants ──────────────────────────────────────────────
-Route::get   ('students',             [AdminStudent::class, 'index']       )->name('students.index');
-Route::post  ('students',             [AdminStudent::class, 'store']       )->name('students.store');   // ← nouveau
-Route::get   ('students/{id}',        [AdminStudent::class, 'show']        )->name('students.show');
-Route::put   ('students/{id}',        [AdminStudent::class, 'update']      )->name('students.update');  // ← nouveau
-Route::put   ('students/{id}/status', [AdminStudent::class, 'updateStatus'])->name('students.update-status');
-Route::delete('students/{id}',        [AdminStudent::class, 'destroy']     )->name('students.destroy'); // ← nouveau
 
     });
 

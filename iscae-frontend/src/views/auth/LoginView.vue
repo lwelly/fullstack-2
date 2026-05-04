@@ -1,81 +1,107 @@
 <template>
-  <div class="login-page">
-    <v-container class="fill-height" fluid>
-      <v-row align="center" justify="center">
+  <v-app :theme="theme">
+    <v-main class="login-bg d-flex align-center justify-center">
+      <v-container class="d-flex justify-center" style="min-height:100vh; align-items:center;">
         <v-col cols="12" sm="8" md="5" lg="4">
+
+          <!-- Logo -->
           <div class="text-center mb-6">
-            <v-icon size="64" color="white">mdi-school</v-icon>
-            <h1 class="text-h4 font-weight-bold text-white mt-2">ISCAE</h1>
-            <p class="text-white opacity-80">Système de Gestion des Réclamations</p>
+            <div class="logo-wrapper mx-auto mb-3">
+              <img
+                src="https://www.genspark.ai/api/files/s/UImvfoE3"
+                alt="Logo ISCAE"
+                class="logo-img"
+              />
+            </div>
+            <h1 class="text-h5 font-weight-bold text-white">ISCAE Réclamations</h1>
+            <p class="text-body-2 text-white-darken-1">Système de gestion des réclamations</p>
           </div>
 
-          <v-card rounded="xl" elevation="8" class="pa-6">
-            <h2 class="text-h5 font-weight-bold text-center mb-6">Connexion</h2>
-
-            <v-alert
-              v-if="errorMsg"
-              type="error"
-              variant="tonal"
-              rounded="lg"
-              class="mb-4"
-              closable
-              @click:close="errorMsg = ''"
-            >
-              {{ errorMsg }}
-            </v-alert>
+          <!-- Card de connexion -->
+          <v-card class="pa-6 rounded-xl" elevation="12">
+            <v-card-title class="text-h6 font-weight-bold text-center mb-4">
+              Connexion
+            </v-card-title>
 
             <v-form @submit.prevent="handleLogin">
+              <!-- Identifiant -->
               <v-text-field
                 v-model="form.login"
-                label="Identifiant"
+                label="Matricule ou Email"
                 prepend-inner-icon="mdi-account"
                 variant="outlined"
-                rounded="lg"
+                density="comfortable"
                 class="mb-3"
                 :disabled="loading"
-                autocomplete="username"
+                autofocus
               />
+
+              <!-- Mot de passe -->
               <v-text-field
                 v-model="form.password"
                 label="Mot de passe"
                 prepend-inner-icon="mdi-lock"
-                :type="showPassword ? 'text' : 'password'"
-                :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-                @click:append-inner="showPassword = !showPassword"
+                :append-inner-icon="showPwd ? 'mdi-eye-off' : 'mdi-eye'"
+                :type="showPwd ? 'text' : 'password'"
                 variant="outlined"
-                rounded="lg"
-                class="mb-4"
+                density="comfortable"
+                class="mb-1"
                 :disabled="loading"
-                autocomplete="current-password"
+                @click:append-inner="showPwd = !showPwd"
               />
+
+              <!-- ✅ LIEN MOT DE PASSE OUBLIÉ -->
+              <div class="text-right mb-4">
+                <router-link
+                  :to="{ name: 'forgot-password' }"
+                  class="text-primary text-decoration-none text-body-2 font-weight-medium"
+                >
+                  <v-icon size="14" class="mr-1">mdi-lock-question</v-icon>
+                  Mot de passe oublié ?
+                </router-link>
+              </div>
+
+              <!-- Message d'erreur -->
+              <v-alert
+                v-if="errorMsg"
+                type="error"
+                variant="tonal"
+                class="mb-4"
+                density="compact"
+              >
+                {{ errorMsg }}
+              </v-alert>
+
+              <!-- Bouton connexion -->
               <v-btn
                 type="submit"
                 color="primary"
                 size="large"
                 block
-                rounded="lg"
                 :loading="loading"
-                prepend-icon="mdi-login"
+                class="mb-4"
               >
+                <v-icon start>mdi-login</v-icon>
                 Se connecter
               </v-btn>
-            </v-form>
 
-            <div class="text-center mt-4">
-              <span class="text-body-2 text-medium-emphasis">Première connexion ? </span>
-              <router-link :to="{ name: 'register' }" class="text-primary font-weight-medium">
-                Créer votre compte
-              </router-link>
-            </div>
+              <!-- Lien inscription -->
+              <div class="text-center text-body-2">
+                Pas encore de compte ?
+                <router-link
+                  :to="{ name: 'register' }"
+                  class="text-primary font-weight-medium text-decoration-none"
+                >
+                  Créer mon compte
+                </router-link>
+              </div>
+            </v-form>
           </v-card>
 
-          <p class="text-center text-white opacity-60 mt-4 text-caption">
-            © {{ new Date().getFullYear() }} ISCAE — Tous droits réservés
-          </p>
         </v-col>
-      </v-row>
-    </v-container>
-  </div>
+      </v-container>
+    </v-main>
+  </v-app>
 </template>
 
 <script setup>
@@ -86,88 +112,68 @@ import { useAuthStore } from '@/stores/auth'
 const router    = useRouter()
 const authStore = useAuthStore()
 
-const form         = ref({ login: '', password: '' })
-const loading      = ref(false)
-const showPassword = ref(false)
-const errorMsg     = ref('')
-
-// ── Génère un fingerprint stable pour cet appareil/navigateur ──────────
-async function getDeviceFingerprint() {
-  try {
-    const raw = [
-      navigator.userAgent,
-      navigator.language,
-      screen.width + 'x' + screen.height,
-      screen.colorDepth,
-      Intl.DateTimeFormat().resolvedOptions().timeZone,
-      navigator.hardwareConcurrency ?? 0,
-    ].join('|')
-    const buf = await crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(raw)
-    )
-    return Array.from(new Uint8Array(buf))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-  } catch {
-    return 'browser-' + Math.random().toString(36).slice(2, 18)
-  }
-}
+const form    = ref({ login: '', password: '' })
+const loading = ref(false)
+const showPwd = ref(false)
+const errorMsg = ref('')
+const theme   = ref('light')
 
 async function handleLogin() {
+  errorMsg.value = ''
   if (!form.value.login || !form.value.password) {
     errorMsg.value = 'Veuillez remplir tous les champs.'
     return
   }
-
-  loading.value  = true
-  errorMsg.value = ''
-   
+  loading.value = true
   try {
-    const fingerprint = await getDeviceFingerprint()
-
     const result = await authStore.login({
-      login:              form.value.login,
-      password:           form.value.password,
-      device_fingerprint: fingerprint,
+      login:    form.value.login,
+      password: form.value.password,
     })
 
-    // ── Cas 1 : OTP requis (nouvel appareil) ──
-    if (result.requires_2fa) {
-      router.push({
-        name:  'verify-2fa',
-        query: {
-          user_id:    result.user_id,
-          login_type: result.login_type,
-          fp:         fingerprint,       // fingerprint passé à la page OTP
-        },
-      })
+    if (result?.requires2FA) {
+      router.push({ name: 'verify-2fa', query: { userId: result.userId } })
       return
     }
 
-    // ── Cas 2 : Connexion directe (appareil de confiance) ──
-    redirectAfterLogin(result.user ?? authStore.user)
+    const role = authStore.user?.role
+    if (role === 'admin')   router.push({ name: 'admin.dashboard' })
+    else if (role === 'student') router.push({ name: 'student.dashboard' })
+    else router.push({ name: 'login' })
 
   } catch (err) {
-    console.error('[Login] Erreur:', err.response?.data ?? err)
-    errorMsg.value = err?.response?.data?.message ?? 'Identifiants incorrects.'
+    errorMsg.value =
+      err.response?.data?.message ??
+      err.message ??
+      'Identifiants incorrects. Veuillez réessayer.'
   } finally {
     loading.value = false
-  }
-}
-
-function redirectAfterLogin(user) {
-  if (user?.role === 'admin') {
-    router.push({ name: 'admin.dashboard' })
-  } else {
-    router.push({ name: 'student.dashboard' })
   }
 }
 </script>
 
 <style scoped>
-.login-page {
+.login-bg {
+  background: linear-gradient(135deg, #1a237e 0%, #283593 40%, #3949ab 100%);
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a237e 0%, #283593 50%, #3949ab 100%);
+}
+
+.logo-wrapper {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.3), 0 6px 20px rgba(0,0,0,0.4);
+}
+
+.logo-img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 50%;
 }
 </style>

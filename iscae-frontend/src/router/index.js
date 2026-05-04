@@ -2,9 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 // ── Auth Views ──────────────────────────────────────────────────────────
-const LoginView      = () => import('@/views/auth/LoginView.vue')
-const TwoFactorView  = () => import('@/views/auth/TwoFactorView.vue')
-const RegisterView   = () => import('@/views/auth/RegisterView.vue')
+const LoginView           = () => import('@/views/auth/LoginView.vue')
+const TwoFactorView       = () => import('@/views/auth/TwoFactorView.vue')
+const RegisterView        = () => import('@/views/auth/RegisterView.vue')
+const ForgotPasswordView  = () => import('@/views/auth/ForgotPasswordView.vue')
 
 // ── Layouts ─────────────────────────────────────────────────────────────
 const AdminLayout    = () => import('@/layouts/AdminLayout.vue')
@@ -42,13 +43,21 @@ const routes = [
     path:      '/register',
     name:      'register',
     component: RegisterView,
-    meta:      { guest: true, allowPostRegister: true }, // ← allowPostRegister
+    meta:      { guest: true, allowPostRegister: true },
   },
   {
     path:      '/2fa',
     name:      'verify-2fa',
     component: TwoFactorView,
     meta:      { guest: false, requiresAuth: false },
+  },
+
+  // ── ✅ Mot de passe oublié ──────────────────────────────────────────
+  {
+    path:      '/forgot-password',
+    name:      'forgot-password',
+    component: ForgotPasswordView,
+    meta:      { guest: true },
   },
 
   // ── Admin ────────────────────────────────────────────────────────────
@@ -122,12 +131,16 @@ router.beforeEach(async (to) => {
 
   // ── Route guest ─────────────────────────────────────────────────────
   if (to.meta.guest && isAuth) {
-    // ✅ Exception : si on vient de s'inscrire, laisser passer
-    // (la redirection est gérée par RegisterView avec setTimeout)
+    // ✅ Exception post-inscription : laisser passer RegisterView
     if (to.meta.allowPostRegister && to.name === 'register') {
       return true
     }
-    // Sinon rediriger vers le dashboard
+    // ✅ Exception : laisser accéder forgot-password même si connecté
+    // (cas rare où l'utilisateur veut changer son mot de passe)
+    if (to.name === 'forgot-password') {
+      return true
+    }
+    // Sinon rediriger vers le bon dashboard
     return role === 'admin'
       ? { name: 'admin.dashboard' }
       : { name: 'student.dashboard' }
