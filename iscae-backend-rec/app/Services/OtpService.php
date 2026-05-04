@@ -1,215 +1,289 @@
 <?php
-// app/Services/OtpService.php
-
 namespace App\Services;
 
 use App\Models\OtpCode;
-use App\Models\Setting;
+use App\Models\TrustedDevice;
 use App\Models\User;
-use App\Models\StudentPreloaded;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
-use App\Mail\OtpMail;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\{Hash, Log, Mail};
+use Illuminate\Support\Str;
 
 class OtpService
 {
-    /**
-     * Génère et envoie un OTP
-     * Peut être lié à un User existant OU à un StudentPreloaded (avant inscription)
-     */
-    public function generate(
-        string  $type,
-        ?User   $user       = null,
-        ?StudentPreloaded $preloaded = null,
-        ?string $ip         = null
-    ): OtpCode {
+    // ─────────────────────────────────────────────
+    //  GÉNÉRER ET ENVOYER OTP
+    // ─────────────────────────────────────────────
 
+    public function generate(User $user, string $type, Request $request): OtpCode
+    {
         // Invalider les anciens OTP du même type
-        $this->invalidatePrevious($type, $user, $preloaded);
+        OtpCode::where('user_id', $user->id)
+            ->where('type', $type)
+            ->where('is_used', false)
+            ->update(['is_used' => true]);
 
-        // Générer un code à 6 chiffres
-        $plainCode = $this->generateCode();
+        // Générer code à 6 chiffres
+        $plainCode = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
-        // Récupérer les paramètres
-        $expiryMinutes = (int) Setting::getValue('otp_expiry_minutes', 10);
-        $maxAttempts   = (int) Setting::getValue('otp_max_attempts', 5);
-
-        // Créer l'OTP avec le code hashé
         $otp = OtpCode::create([
-            'user_id'      => $user?->id,
-            'preloaded_id' => $preloaded?->id,
-            'type'         => $type,
-            'code_hash'    => Hash::make($plainCode),
-            'attempts'     => 0,
-            'max_attempts' => $maxAttempts,
-            'is_used'      => false,
-            'expires_at'   => now()->addMinutes($expiryMinutes),
-            'ip_address'   => $ip,
+            'user_id'    => $user->id,
+            'code'       => Hash::make($plainCode),
+            'type'       => $type,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'is_used'    => false,
+            'attempts'   => 0,
+            'expires_at' => now()->addMinutes(10),
         ]);
 
-        // Déterminer l'email destinataire
-        $email    = $user?->email ?? $preloaded?->email;
-        $fullName = $user
-            ? ($user->profile?->full_name ?? $user->login_identifier)
-            : ($preloaded ? $preloaded->prenom . ' ' . $preloaded->nom : 'Utilisateur');
-
         // Envoyer par email
-        Mail::to($email)->send(new OtpMail(
-            code:      $plainCode,
-            fullName:  $fullName,
-            type:      $type,
-            expiresIn: $expiryMinutes
-        ));
+        $this->sendEmail($user, $plainCode, $type);
+
+        Log::info('[OtpService] OTP généré', [
+            'user_id' => $user->id,
+            'type'    => $type,
+            'ip'      => $request->ip(),
+        ]);
 
         return $otp;
     }
 
-    /**
-     * Vérifie un OTP soumis par l'utilisateur
-     */
-    public function verify(
-        string  $plainCode,
-        string  $type,
-        ?User   $user       = null,
-        ?StudentPreloaded $preloaded = null
-    ): array {
+    // ─────────────────────────────────────────────
+    //  VÉRIFIER OTP
+    // ─────────────────────────────────────────────
 
-        // Chercher l'OTP valide le plus récent
-        $query = OtpCode::valid()->ofType($type);
+    public function verify(User $user, string $code, string $type): bool
+    {
+        $otp = OtpCode::where('user_id', $user->id)
+            ->where('type', $type)
+            ->where('is_used', false)
+            ->where('expires_at', '>', now())
+            ->latest()
+            ->first();
 
-        if ($user) {
-            $query->where('user_id', $user->id);
-        } elseif ($preloaded) {
-            $query->where('preloaded_id', $preloaded->id);
-        }
-
-        $otp = $query->latest()->first();
-
-        // Cas : aucun OTP trouvé
         if (!$otp) {
-            return [
-                'success' => false,
-                'message' => 'Aucun OTP valide trouvé. Veuillez en demander un nouveau.',
-                'code'    => 'OTP_NOT_FOUND',
-            ];
+            Log::warning('[OtpService] OTP introuvable ou expiré', [
+                'user_id' => $user->id,
+                'type'    => $type,
+            ]);
+            return false;
         }
 
-        // Cas : trop de tentatives
-        if ($otp->isExhausted()) {
-            return [
-                'success'  => false,
-                'message'  => 'Nombre maximum de tentatives atteint. Veuillez demander un nouveau code.',
-                'code'     => 'OTP_MAX_ATTEMPTS',
-                'remaining'=> 0,
-            ];
+        // Incrémenter tentatives
+        $otp->increment('attempts');
+
+        // Trop de tentatives
+        if ($otp->attempts > 5) {
+            $otp->update(['is_used' => true]);
+            Log::warning('[OtpService] Trop de tentatives', ['user_id' => $user->id]);
+            return false;
         }
 
-        // Cas : expiré
-        if ($otp->isExpired()) {
-            return [
-                'success' => false,
-                'message' => 'Ce code OTP a expiré. Veuillez en demander un nouveau.',
-                'code'    => 'OTP_EXPIRED',
-            ];
+        // Vérifier le code
+        if (!Hash::check($code, $otp->code)) {
+            Log::warning('[OtpService] Code incorrect', [
+                'user_id'  => $user->id,
+                'attempts' => $otp->attempts,
+            ]);
+            return false;
         }
 
-        // Vérification du code
-        $isValid = $otp->verify($plainCode);
-
-        if (!$isValid) {
-            $remaining = $otp->getRemainingAttempts();
-            return [
-                'success'   => false,
-                'message'   => "Code incorrect. Il vous reste {$remaining} tentative(s).",
-                'code'      => 'OTP_INVALID',
-                'remaining' => $remaining,
-            ];
-        }
-
-        return [
-            'success' => true,
-            'message' => 'Code OTP vérifié avec succès.',
-            'otp'     => $otp,
-        ];
+        // Marquer utilisé
+        $otp->update(['is_used' => true]);
+        Log::info('[OtpService] OTP vérifié avec succès', ['user_id' => $user->id]);
+        return true;
     }
 
-    /**
-     * Invalide tous les OTP précédents du même type
-     */
-    private function invalidatePrevious(
-        string  $type,
-        ?User   $user      = null,
-        ?StudentPreloaded $preloaded = null
-    ): void {
-        $query = OtpCode::where('type', $type)
-                        ->where('is_used', false);
+    // ─────────────────────────────────────────────
+    //  VÉRIFIER APPAREIL DE CONFIANCE
+    // ─────────────────────────────────────────────
 
-        if ($user) {
-            $query->where('user_id', $user->id);
-        } elseif ($preloaded) {
-            $query->where('preloaded_id', $preloaded->id);
-        }
+    public function isTrustedDevice(User $user, Request $request): bool
+    {
+        $deviceToken = $request->header('X-Device-Token')
+                    ?? $request->input('device_token');
 
-        $query->update([
-            'is_used'    => true,
-            'expires_at' => now(),
+        if (!$deviceToken) return false;
+
+        $device = TrustedDevice::where('user_id', $user->id)
+            ->where('device_token', $deviceToken)
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if (!$device) return false;
+
+        $device->update(['last_used_at' => now()]);
+
+        Log::info('[OtpService] Appareil de confiance reconnu', [
+            'user_id' => $user->id,
+            'device'  => $device->device_name,
         ]);
+
+        return true;
     }
 
+    // ─────────────────────────────────────────────
+    //  ENREGISTRER APPAREIL DE CONFIANCE
+    // ─────────────────────────────────────────────
 
-    /**
- * Générer un OTP pour l'inscription (lié à preloaded_id, pas user_id)
- */
-public function generateForPreloaded(int $preloadedId, string $email): void
-{
-    $expiry  = (int) Setting::getValue('otp_expiry_minutes', 10);
-    $maxAttempts = (int) Setting::getValue('otp_max_attempts', 5);
-
-    // Invalider les anciens OTPs
-    OtpCode::where('preloaded_id', $preloadedId)
-        ->where('type', 'registration')
-        ->where('is_used', false)
-        ->update(['is_used' => true]);
-
-    $code = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
-
-    OtpCode::create([
-        'user_id'      => null,
-        'preloaded_id' => $preloadedId,
-        'type'         => 'registration',
-        'code_hash'    => Hash::make($code),
-        'max_attempts' => $maxAttempts,
-        'expires_at'   => now()->addMinutes($expiry),
-        'ip_address'   => request()->ip(),
-    ]);
-
-    // Envoyer par email (loggé si MAIL_MAILER=log)
-    \Illuminate\Support\Facades\Mail::to($email)
-        ->send(new \App\Mail\OtpMail($code, 'registration'));
-}
-
-
-    /**
-     * Génère un code numérique à 6 chiffres sécurisé
-     */
-    private function generateCode(): string
+    public function trustDevice(User $user, Request $request): string
     {
-        return str_pad(
-            (string) random_int(100000, 999999),
-            6,
-            '0',
-            STR_PAD_LEFT
-        );
+        $deviceToken = Str::random(64);
+        $ua          = $request->userAgent() ?? '';
+
+        TrustedDevice::create([
+            'user_id'      => $user->id,
+            'device_token' => $deviceToken,
+            'ip_address'   => $request->ip(),
+            'user_agent'   => $ua,
+            'device_name'  => $this->parseDeviceName($ua),
+            'last_used_at' => now(),
+            'expires_at'   => now()->addDays(30),
+        ]);
+
+        Log::info('[OtpService] Appareil enregistré', [
+            'user_id' => $user->id,
+            'device'  => $this->parseDeviceName($ua),
+        ]);
+
+        return $deviceToken;
     }
 
-    /**
-     * Masque un email pour l'affichage (ex: mo****@iscae.mr)
-     */
-    public function maskEmail(string $email): string
+    // ─────────────────────────────────────────────
+    //  ENVOI EMAIL
+    // ─────────────────────────────────────────────
+
+    private function sendEmail(User $user, string $code, string $type): void
     {
-        [$local, $domain] = explode('@', $email);
-        $visible = substr($local, 0, 2);
-        $masked  = str_repeat('*', max(strlen($local) - 2, 3));
-        return $visible . $masked . '@' . $domain;
+        try {
+            $subject = $type === 'login'
+                ? '🔐 Code de connexion ISCAE'
+                : '🔑 Réinitialisation de mot de passe ISCAE';
+
+            $html = $this->buildEmailHtml($user, $code, $type);
+
+            Mail::html($html, function ($message) use ($user, $subject) {
+                $message->to($user->email)->subject($subject);
+            });
+
+            Log::info('[OtpService] Email envoyé', [
+                'user_id' => $user->id,
+                'email'   => $user->email,
+                'type'    => $type,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('[OtpService] Erreur envoi email', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    //  TEMPLATE EMAIL
+    // ─────────────────────────────────────────────
+
+    private function buildEmailHtml(User $user, string $code, string $type): string
+    {
+        $name       = $user->login_identifier ?? $user->email;
+        $actionText = $type === 'login'
+            ? 'Vous tentez de vous connecter à votre espace étudiant ISCAE.'
+            : 'Vous avez demandé la réinitialisation de votre mot de passe ISCAE.';
+
+        return <<<HTML
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px;">
+    <tr><td align="center">
+      <table width="500" cellpadding="0" cellspacing="0"
+             style="background:#fff;border-radius:16px;overflow:hidden;
+                    box-shadow:0 8px 32px rgba(0,0,0,0.10);">
+
+        <!-- En-tête -->
+        <tr><td style="background:linear-gradient(135deg,#0F2D5E 0%,#1565C0 100%);
+                        padding:32px 36px;text-align:center;">
+          <div style="font-size:26px;font-weight:800;color:#fff;letter-spacing:4px;">ISCAE</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.65);
+                      margin-top:4px;letter-spacing:2px;text-transform:uppercase;">
+            Espace Étudiant
+          </div>
+        </td></tr>
+
+        <!-- Corps -->
+        <tr><td style="padding:36px;">
+          <p style="font-size:15px;color:#1e293b;margin:0 0 6px;">
+            Bonjour <strong>{$name}</strong>,
+          </p>
+          <p style="font-size:13px;color:#64748b;margin:0 0 28px;">{$actionText}</p>
+
+          <!-- Code OTP -->
+          <div style="background:#f8fafc;border:2px dashed #1565C0;
+                      border-radius:14px;padding:28px 20px;text-align:center;
+                      margin-bottom:28px;">
+            <div style="font-size:11px;color:#64748b;text-transform:uppercase;
+                        letter-spacing:3px;margin-bottom:12px;">Votre code de vérification</div>
+            <div style="font-size:42px;font-weight:900;letter-spacing:14px;
+                        color:#0F2D5E;font-variant-numeric:tabular-nums;">{$code}</div>
+            <div style="font-size:12px;color:#ef4444;margin-top:12px;font-weight:500;">
+              ⏱ Valable 10 minutes uniquement
+            </div>
+          </div>
+
+          <!-- Avertissement -->
+          <div style="background:#fefce8;border:1px solid #fde68a;border-radius:10px;
+                      padding:12px 16px;margin-bottom:20px;">
+            <p style="font-size:12px;color:#92400e;margin:0;">
+              ⚠️ <strong>Ne partagez jamais ce code.</strong>
+              L'équipe ISCAE ne vous demandera jamais votre code OTP.
+            </p>
+          </div>
+
+          <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0;">
+            Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.
+          </p>
+        </td></tr>
+
+        <!-- Pied de page -->
+        <tr><td style="background:#f8fafc;padding:16px;text-align:center;
+                        border-top:1px solid #e2e8f0;">
+          <div style="font-size:11px;color:#94a3b8;">
+            © 2026 ISCAE — Institut Supérieur de Comptabilité et d'Administration des Entreprises
+          </div>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+HTML;
+    }
+
+    // ─────────────────────────────────────────────
+    //  UTILITAIRES
+    // ─────────────────────────────────────────────
+
+    private function parseDeviceName(string $ua): string
+    {
+        $browser = match(true) {
+            str_contains($ua, 'Edg')     => 'Edge',
+            str_contains($ua, 'Chrome')  => 'Chrome',
+            str_contains($ua, 'Firefox') => 'Firefox',
+            str_contains($ua, 'Safari')  => 'Safari',
+            default                      => 'Navigateur inconnu',
+        };
+
+        $os = match(true) {
+            str_contains($ua, 'Windows') => 'Windows',
+            str_contains($ua, 'Mac')     => 'macOS',
+            str_contains($ua, 'Android') => 'Android',
+            str_contains($ua, 'iPhone')  => 'iPhone',
+            str_contains($ua, 'Linux')   => 'Linux',
+            default                      => 'OS inconnu',
+        };
+
+        return "{$browser} / {$os}";
     }
 }

@@ -42,11 +42,11 @@ const routes = [
     path:      '/register',
     name:      'register',
     component: RegisterView,
-    meta:      { guest: true },
+    meta:      { guest: true, allowPostRegister: true }, // ← allowPostRegister
   },
   {
     path:      '/2fa',
-    name:      'verify-2fa',   // ✅ harmonisé avec LoginView.vue
+    name:      'verify-2fa',
     component: TwoFactorView,
     meta:      { guest: false, requiresAuth: false },
   },
@@ -109,7 +109,7 @@ router.beforeEach(async (to) => {
   const isAuth = auth.isAuthenticated
   const role   = auth.user?.role
 
-  // ── Route protégée ──
+  // ── Route protégée ──────────────────────────────────────────────────
   if (to.meta.requiresAuth) {
     if (!isAuth) return { name: 'login' }
     if (to.meta.role && to.meta.role !== role) {
@@ -120,26 +120,30 @@ router.beforeEach(async (to) => {
     return true
   }
 
-  // ── Route guest — redirige si déjà connecté ──
+  // ── Route guest ─────────────────────────────────────────────────────
   if (to.meta.guest && isAuth) {
+    // ✅ Exception : si on vient de s'inscrire, laisser passer
+    // (la redirection est gérée par RegisterView avec setTimeout)
+    if (to.meta.allowPostRegister && to.name === 'register') {
+      return true
+    }
+    // Sinon rediriger vers le dashboard
     return role === 'admin'
       ? { name: 'admin.dashboard' }
       : { name: 'student.dashboard' }
   }
 
-  // ── Page 2FA — vérifier que la session OTP existe ──
+  // ── Page 2FA ─────────────────────────────────────────────────────────
   if (to.name === 'verify-2fa') {
-    const hasQueryId     = !!to.query.user_id
-    const hasSessionId   = !!sessionStorage.getItem('2fa_user_id')
-    const has2fa         = hasQueryId || hasSessionId
+    const hasQueryId   = !!to.query.user_id
+    const hasSessionId = !!sessionStorage.getItem('2fa_user_id')
+    const has2fa       = hasQueryId || hasSessionId
 
-    // Déjà connecté → dashboard
     if (isAuth) {
       return role === 'admin'
         ? { name: 'admin.dashboard' }
         : { name: 'student.dashboard' }
     }
-    // Pas de session OTP → login
     if (!has2fa) return { name: 'login' }
   }
 

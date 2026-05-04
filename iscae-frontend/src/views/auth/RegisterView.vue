@@ -1,435 +1,556 @@
 <template>
-  <v-app>
-    <v-main style="background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%); min-height: 100vh;">
-      <v-container fluid class="fill-height">
-        <v-row align="center" justify="center">
-          <v-col cols="12" sm="9" md="6" lg="5">
+  <div class="register-page">
+    <v-container class="fill-height" fluid>
+      <v-row align="center" justify="center">
+        <v-col cols="12" sm="9" md="6" lg="5">
 
-            <!-- Header -->
-            <div class="text-center mb-6">
-              <v-avatar size="72" color="white" class="mb-3 elevation-4">
-                <v-icon size="40" color="primary">mdi-school</v-icon>
-              </v-avatar>
-              <h1 class="text-h4 font-weight-bold text-white">ISCAE</h1>
-              <p class="text-subtitle-2 text-white mt-1" style="opacity:0.85">
-                Création de votre compte étudiant
-              </p>
+          <!-- Logo -->
+          <div class="text-center mb-6">
+            <div class="logo-circle mx-auto mb-3">
+              <img
+                src="https://www.genspark.ai/api/files/s/UImvfoE3"
+                alt="ISCAE"
+                class="logo-img"
+              />
+            </div>
+            <h1 class="text-h4 font-weight-bold text-white mt-2">ISCAE</h1>
+            <p class="text-white opacity-80">Création de votre compte étudiant</p>
+          </div>
+
+          <v-card rounded="xl" elevation="8" class="pa-6">
+
+            <!-- Stepper -->
+            <div class="d-flex align-center justify-center mb-6 stepper">
+              <template v-for="(s, i) in steps" :key="i">
+                <div class="step-item" :class="{ active: step === i+1, done: step > i+1 }">
+                  <div class="step-circle">
+                    <v-icon v-if="step > i+1" size="16">mdi-check</v-icon>
+                    <span v-else>{{ i+1 }}</span>
+                  </div>
+                  <span class="step-label">{{ s }}</span>
+                </div>
+                <div v-if="i < steps.length-1" class="step-line" :class="{ done: step > i+1 }"/>
+              </template>
             </div>
 
-            <!-- Stepper Card -->
-            <v-card rounded="xl" elevation="8">
+            <!-- Erreur globale -->
+            <v-alert
+              v-if="errorMsg"
+              type="error"
+              variant="tonal"
+              rounded="lg"
+              class="mb-4"
+              closable
+              @click:close="errorMsg=''"
+            >
+              {{ errorMsg }}
+            </v-alert>
 
-              <!-- Step Indicators -->
-              <v-card-text class="pa-5 pb-0">
-                <div class="d-flex align-center justify-center ga-2 mb-4">
-                  <div v-for="(s, i) in steps" :key="i" class="d-flex align-center">
-                    <v-avatar
-                      :color="step > i + 1 ? 'success' : step === i + 1 ? 'primary' : 'grey-lighten-2'"
-                      size="32"
-                    >
-                      <v-icon v-if="step > i + 1" color="white" size="16">mdi-check</v-icon>
-                      <span v-else class="text-caption font-weight-bold text-white">{{ i + 1 }}</span>
-                    </v-avatar>
-                    <span
-                      class="text-caption ml-1 mr-2 d-none d-sm-block"
-                      :class="step === i + 1 ? 'text-primary font-weight-bold' : 'text-grey'"
-                    >
-                      {{ s }}
-                    </span>
-                    <v-divider v-if="i < steps.length - 1" style="width:20px" />
-                  </div>
-                </div>
-              </v-card-text>
+            <!-- ═══ ÉTAPE 1 : Identité ═══ -->
+            <div v-if="step === 1">
+              <h2 class="text-h6 font-weight-bold mb-1">Vérification de votre identité</h2>
+              <p class="text-body-2 text-medium-emphasis mb-4">
+                Saisissez votre matricule et votre <strong>email personnel</strong>
+                (Gmail, Hotmail, etc.) tels qu'enregistrés par l'administration.
+              </p>
 
-              <!-- ══════════ STEP 1 — VERIFY IDENTITY ══════════ -->
-              <v-card-text v-if="step === 1" class="pa-5">
-                <h3 class="text-h6 font-weight-bold text-primary mb-2">
-                  Vérification de votre identité
-                </h3>
-                <p class="text-body-2 text-grey mb-4">
-                  Saisissez votre matricule et votre
-                  <strong>email personnel</strong> (Gmail, Hotmail, etc.)
-                  tels qu'enregistrés par l'administration.
-                </p>
+              <v-text-field
+                v-model="form.matricule"
+                label="Matricule *"
+                prepend-inner-icon="mdi-identifier"
+                variant="outlined"
+                rounded="lg"
+                class="mb-3"
+                :disabled="loading"
+                @keyup.enter="handleVerifyIdentity"
+              />
+              <v-text-field
+                v-model="form.email"
+                label="Email personnel *"
+                prepend-inner-icon="mdi-email"
+                type="email"
+                variant="outlined"
+                rounded="lg"
+                class="mb-1"
+                :disabled="loading"
+                hint="Saisissez votre adresse email personnelle (Gmail, Hotmail, etc.)"
+                persistent-hint
+                @keyup.enter="handleVerifyIdentity"
+              />
 
-                <v-form ref="form1Ref">
-                  <v-text-field
-                    v-model="form.matricule"
-                    label="Matricule *"
-                    prepend-inner-icon="mdi-identifier"
-                    density="comfortable"
-                    class="mb-3"
-                    placeholder="20240001"
-                    :rules="[v => !!v || 'Matricule requis']"
-                    :disabled="verifyLoading"
-                  />
+              <v-btn
+                block color="primary" size="large" rounded="lg" class="mt-4"
+                :loading="loading"
+                prepend-icon="mdi-account-check"
+                @click="handleVerifyIdentity"
+              >
+                Vérifier mon identité
+              </v-btn>
+            </div>
 
-                  <v-text-field
-                    v-model="form.email"
-                    label="Email personnel *"
-                    prepend-inner-icon="mdi-email"
-                    density="comfortable"
-                    class="mb-3"
-                    type="email"
-                    placeholder="exemple@gmail.com"
-                    hint="Saisissez votre adresse email personnelle (Gmail, Hotmail, etc.)"
-                    persistent-hint
-                    :rules="[
-                      v => !!v || 'Email requis',
-                      v => /.+@.+\..+/.test(v) || 'Email invalide'
-                    ]"
-                    :disabled="verifyLoading"
-                  />
+            <!-- ═══ ÉTAPE 2 : OTP ═══ -->
+            <div v-if="step === 2">
+              <h2 class="text-h6 font-weight-bold mb-1">Vérification par email</h2>
+              <p class="text-body-2 text-medium-emphasis mb-2">
+                Un code à 6 chiffres a été envoyé à
+                <strong>{{ maskedEmail }}</strong>
+              </p>
 
-                  <v-alert v-if="error" type="error" variant="tonal" rounded="lg"
-                    class="mb-3" density="compact">
-                    {{ error }}
-                  </v-alert>
-
-                  <v-btn
-                    color="primary" size="large" block
-                    :loading="verifyLoading"
-                    @click="verifyIdentity"
-                  >
-                    <v-icon start>mdi-account-check</v-icon>
-                    Vérifier mon identité
-                  </v-btn>
-                </v-form>
-              </v-card-text>
-
-              <!-- ══════════ STEP 2 — OTP ══════════ -->
-              <v-card-text v-if="step === 2" class="pa-5">
-                <h3 class="text-h6 font-weight-bold text-primary mb-1">
-                  Code de vérification
-                </h3>
-                <p class="text-body-2 text-grey mb-4">
-                  Un code OTP a été envoyé à
-                  <strong>{{ maskedEmail }}</strong>
-                </p>
-
-                <!-- Aperçu étudiant -->
-                <v-sheet rounded="lg" color="blue-lighten-5" class="pa-3 mb-4" border="sm">
-                  <div class="d-flex align-center ga-2">
-                    <v-icon color="primary" size="20">mdi-account-circle</v-icon>
-                    <div>
-                      <p class="text-body-2 font-weight-bold">{{ preloadedName }}</p>
-                      <p class="text-caption text-grey">
-                        {{ preloadedFiliere }} — {{ preloadedNiveau }}
-                      </p>
+              <!-- Infos étudiant -->
+              <v-card variant="tonal" color="primary" rounded="lg" class="pa-3 mb-4">
+                <div class="d-flex align-center" style="gap:10px">
+                  <v-icon color="primary">mdi-account-school</v-icon>
+                  <div>
+                    <div class="font-weight-bold">{{ studentInfo.name }}</div>
+                    <div class="text-caption text-medium-emphasis">
+                      {{ studentInfo.filiere }}
+                      <span v-if="studentInfo.filiere && studentInfo.niveau"> — </span>
+                      {{ studentInfo.niveau }}
                     </div>
                   </div>
-                </v-sheet>
-
-                <v-form ref="form2Ref">
-                  <v-text-field
-                    v-model="form.otp_code"
-                    label="Code OTP *"
-                    prepend-inner-icon="mdi-numeric"
-                    density="comfortable"
-                    class="mb-4"
-                    maxlength="6"
-                    style="letter-spacing: 6px; font-size: 22px"
-                    :rules="[
-                      v => !!v || 'Code requis',
-                      v => v.length === 6 || '6 chiffres requis'
-                    ]"
-                    :disabled="otpLoading"
-                  />
-
-                  <v-alert v-if="error" type="error" variant="tonal" rounded="lg"
-                    class="mb-3" density="compact">
-                    {{ error }}
-                  </v-alert>
-
-                  <v-btn
-                    color="primary" size="large" block
-                    :loading="otpLoading"
-                    @click="verifyOTP"
-                  >
-                    <v-icon start>mdi-check-circle</v-icon>
-                    Vérifier le code
-                  </v-btn>
-                </v-form>
-
-                <div class="text-center mt-3">
-                  <v-btn variant="text" color="grey" size="small" @click="step = 1">
-                    <v-icon start size="14">mdi-arrow-left</v-icon>
-                    Retour
-                  </v-btn>
-                  <v-btn variant="text" color="primary" size="small"
-                    :loading="resendLoading" @click="resendOTP">
-                    <v-icon start size="14">mdi-refresh</v-icon>
-                    Renvoyer le code
-                  </v-btn>
                 </div>
-              </v-card-text>
+              </v-card>
 
-              <!-- ══════════ STEP 3 — SET PASSWORD ══════════ -->
-              <v-card-text v-if="step === 3" class="pa-5">
-                <h3 class="text-h6 font-weight-bold text-primary mb-1">
-                  Créer votre mot de passe
-                </h3>
-                <p class="text-body-2 text-grey mb-4">
-                  Choisissez un mot de passe sécurisé pour votre compte.
-                </p>
+              <v-otp-input
+                v-model="form.otp"
+                length="6"
+                type="number"
+                variant="outlined"
+                class="mb-3"
+                :disabled="loading"
+                @finish="handleVerifyOtp"
+              />
 
-                <v-form ref="form3Ref">
-                  <v-text-field
-                    v-model="form.password"
-                    label="Mot de passe *"
-                    :type="showPass ? 'text' : 'password'"
-                    prepend-inner-icon="mdi-lock"
-                    :append-inner-icon="showPass ? 'mdi-eye-off' : 'mdi-eye'"
-                    @click:append-inner="showPass = !showPass"
-                    density="comfortable"
-                    class="mb-2"
-                    :rules="[
-                      v => !!v || 'Mot de passe requis',
-                      v => v.length >= 8 || 'Minimum 8 caractères',
-                      v => /[A-Z]/.test(v) || 'Une majuscule requise',
-                      v => /[0-9]/.test(v) || 'Un chiffre requis',
-                    ]"
-                    :disabled="passLoading"
-                  />
+              <v-btn
+                block color="primary" size="large" rounded="lg"
+                :loading="loading"
+                prepend-icon="mdi-shield-check"
+                @click="handleVerifyOtp"
+              >
+                Vérifier le code
+              </v-btn>
 
-                  <!-- Indicateur de force -->
-                  <div class="mb-3">
-                    <v-progress-linear
-                      :model-value="passwordStrength"
-                      :color="passwordStrengthColor"
-                      rounded height="4" bg-color="grey-lighten-3"
-                    />
-                    <p class="text-caption mt-1" :class="`text-${passwordStrengthColor}`">
-                      Force : {{ passwordStrengthLabel }}
-                    </p>
-                  </div>
-
-                  <v-text-field
-                    v-model="form.password_confirmation"
-                    label="Confirmer le mot de passe *"
-                    :type="showPass2 ? 'text' : 'password'"
-                    prepend-inner-icon="mdi-lock-check"
-                    :append-inner-icon="showPass2 ? 'mdi-eye-off' : 'mdi-eye'"
-                    @click:append-inner="showPass2 = !showPass2"
-                    density="comfortable"
-                    class="mb-3"
-                    :rules="[
-                      v => !!v || 'Confirmation requise',
-                      v => v === form.password || 'Les mots de passe ne correspondent pas'
-                    ]"
-                    :disabled="passLoading"
-                  />
-
-                  <v-alert v-if="error" type="error" variant="tonal" rounded="lg"
-                    class="mb-3" density="compact">
-                    {{ error }}
-                  </v-alert>
-
-                  <v-btn
-                    color="success" size="large" block
-                    :loading="passLoading"
-                    @click="setPassword"
-                  >
-                    <v-icon start>mdi-account-plus</v-icon>
-                    Créer mon compte
-                  </v-btn>
-                </v-form>
-              </v-card-text>
-
-              <!-- ══════════ STEP 4 — SUCCESS ══════════ -->
-              <v-card-text v-if="step === 4" class="pa-8 text-center">
-                <v-icon size="80" color="success" class="mb-4">mdi-check-circle</v-icon>
-                <h3 class="text-h5 font-weight-bold text-success mb-2">
-                  Compte Créé !
-                </h3>
-                <p class="text-body-2 text-grey mb-2">
-                  Bienvenue à l'ISCAE, <strong>{{ createdName }}</strong> !
-                </p>
-                <p class="text-caption text-grey mb-6">
-                  Votre compte est actif. Vous pouvez vous connecter dès maintenant.
-                </p>
-                <v-btn color="primary" size="large" to="/login" prepend-icon="mdi-login">
-                  Se connecter
+              <div class="text-center mt-3">
+                <v-btn
+                  variant="text"
+                  size="small"
+                  :disabled="resendCooldown > 0 || loading"
+                  @click="handleResendOtp"
+                >
+                  {{ resendCooldown > 0 ? `Renvoyer dans ${resendCooldown}s` : 'Renvoyer le code' }}
                 </v-btn>
-              </v-card-text>
-
-              <!-- Footer -->
-              <v-card-actions v-if="step < 4" class="justify-center pb-4">
-                <span class="text-body-2 text-grey">Déjà un compte ?</span>
-                <v-btn variant="text" color="primary" size="small" to="/login" class="ml-1">
-                  Se connecter
-                </v-btn>
-              </v-card-actions>
-
-            </v-card>
-
-            <div class="text-center mt-4">
-              <p class="text-caption text-white" style="opacity:0.7">
-                © 2026 ISCAE — Tous droits réservés
-              </p>
+              </div>
             </div>
 
-          </v-col>
-        </v-row>
-      </v-container>
-    </v-main>
-  </v-app>
+            <!-- ═══ ÉTAPE 3 : Mot de passe ═══ -->
+            <div v-if="step === 3">
+              <h2 class="text-h6 font-weight-bold mb-1">Définir votre mot de passe</h2>
+              <p class="text-body-2 text-medium-emphasis mb-4">
+                Choisissez un mot de passe sécurisé pour votre compte.
+              </p>
+
+              <v-text-field
+                v-model="form.password"
+                label="Mot de passe *"
+                prepend-inner-icon="mdi-lock"
+                :type="showPwd ? 'text' : 'password'"
+                :append-inner-icon="showPwd ? 'mdi-eye-off' : 'mdi-eye'"
+                @click:append-inner="showPwd = !showPwd"
+                variant="outlined"
+                rounded="lg"
+                class="mb-3"
+                :disabled="loading"
+                hint="Minimum 8 caractères"
+                persistent-hint
+              />
+              <v-text-field
+                v-model="form.passwordConfirm"
+                label="Confirmer le mot de passe *"
+                prepend-inner-icon="mdi-lock-check"
+                :type="showPwd ? 'text' : 'password'"
+                variant="outlined"
+                rounded="lg"
+                class="mb-4"
+                :disabled="loading"
+                :error-messages="pwdMismatch ? ['Les mots de passe ne correspondent pas'] : []"
+                @keyup.enter="handleSetPassword"
+              />
+
+              <v-btn
+                block color="success" size="large" rounded="lg"
+                :loading="loading"
+                prepend-icon="mdi-check-circle"
+                @click="handleSetPassword"
+              >
+                Créer mon compte
+              </v-btn>
+            </div>
+
+            <!-- ═══ SUCCÈS ═══ -->
+            <div v-if="step === 4" class="text-center py-6">
+              <v-icon size="72" color="success">mdi-check-circle</v-icon>
+              <h2 class="text-h6 font-weight-bold mt-3 mb-2">Compte créé avec succès !</h2>
+              <p class="text-body-2 text-medium-emphasis mb-4">
+                Bienvenue <strong>{{ studentInfo.name }}</strong>. Redirection en cours...
+              </p>
+              <v-progress-linear indeterminate color="success" rounded height="4" />
+            </div>
+
+            <!-- Lien connexion -->
+            <div v-if="step < 4" class="text-center mt-4">
+              <span class="text-body-2 text-medium-emphasis">Déjà un compte ? </span>
+              <router-link :to="{ name: 'login' }" class="text-primary font-weight-medium">
+                Se connecter
+              </router-link>
+            </div>
+
+          </v-card>
+
+          <p class="text-center text-white opacity-60 mt-4 text-caption">
+            © {{ new Date().getFullYear() }} ISCAE — Tous droits réservés
+          </p>
+        </v-col>
+      </v-row>
+    </v-container>
+  </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useToast } from 'vue-toastification'
+import { ref, computed, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import api from '@/api/axios'
 
-const toast = useToast()
+const router    = useRouter()
+const authStore = useAuthStore()
 
-const step         = ref(1)
-const error        = ref('')
-const verifyLoading = ref(false)
-const resendLoading = ref(false)
-const otpLoading   = ref(false)
-const passLoading  = ref(false)
-const showPass     = ref(false)
-const showPass2    = ref(false)
-
-const form1Ref = ref(null)
-const form2Ref = ref(null)
-const form3Ref = ref(null)
-
-const maskedEmail       = ref('')
-const preloadedName     = ref('')
-const preloadedFiliere  = ref('')
-const preloadedNiveau   = ref('')
-const preloadedId       = ref(null)
-const registrationToken = ref('')
-const createdName       = ref('')
+const step     = ref(1)
+const loading  = ref(false)
+const errorMsg = ref('')
+const showPwd  = ref(false)
 
 const steps = ['Identité', 'Vérification', 'Mot de passe']
 
 const form = ref({
-  matricule:             '',
-  email:                 '',
-  otp_code:              '',
-  password:              '',
-  password_confirmation: '',
+  matricule:       '',
+  email:           '',
+  otp:             '',
+  password:        '',
+  passwordConfirm: '',
 })
 
-// ── Password Strength ──────────────────────────────────────────────────────
-const passwordStrength = computed(() => {
-  const p = form.value.password
-  if (!p) return 0
-  let score = 0
-  if (p.length >= 8)          score += 25
-  if (p.length >= 12)         score += 15
-  if (/[A-Z]/.test(p))        score += 20
-  if (/[0-9]/.test(p))        score += 20
-  if (/[^A-Za-z0-9]/.test(p)) score += 20
-  return Math.min(score, 100)
-})
+// Données conservées entre les étapes
+const studentId   = ref(null)
+const maskedEmail = ref('')
+const studentInfo = ref({ name: '', filiere: '', niveau: '' })
 
-const passwordStrengthColor = computed(() => {
-  if (passwordStrength.value < 40) return 'error'
-  if (passwordStrength.value < 70) return 'warning'
-  return 'success'
-})
+const resendCooldown = ref(0)
+let cooldownTimer = null
 
-const passwordStrengthLabel = computed(() => {
-  if (passwordStrength.value < 40) return 'Faible'
-  if (passwordStrength.value < 70) return 'Moyen'
-  return 'Fort'
-})
+// ── Computed ──────────────────────────────────────────────────────────────
+const pwdMismatch = computed(() =>
+  form.value.passwordConfirm.length > 0 &&
+  form.value.password !== form.value.passwordConfirm
+)
 
-// ── Step 1 — Vérifier identité ────────────────────────────────────────────
-async function verifyIdentity() {
-  const { valid } = await form1Ref.value.validate()
-  if (!valid) return
-  verifyLoading.value = true
-  error.value = ''
+// ══════════════════════════════════════════════════════════════════════════
+// ÉTAPE 1 — Vérifier identité
+// POST /api/v1/auth/verify-identity
+// ══════════════════════════════════════════════════════════════════════════
+async function handleVerifyIdentity() {
+  errorMsg.value = ''
+  if (!form.value.matricule.trim() || !form.value.email.trim()) {
+    errorMsg.value = 'Veuillez remplir tous les champs.'
+    return
+  }
+  loading.value = true
   try {
-    const res = await api.post('/auth/register/verify', {
-      matricule: form.value.matricule,
-      email:     form.value.email,
+    const res  = await api.post('/auth/verify-identity', {
+      matricule: form.value.matricule.trim().toUpperCase(),
+      email:     form.value.email.trim().toLowerCase(),
     })
+    const data = res.data?.data ?? res.data
 
-    // ✅ Un seul niveau de data
-    const d = res.data.data
-    maskedEmail.value      = d.masked_email
-    preloadedName.value    = d.name
-    preloadedFiliere.value = d.filiere
-    preloadedNiveau.value  = d.niveau
-    preloadedId.value      = d.preloaded_id
+    console.log('[Register] Étape 1 réponse:', data)
+
+    // Sauvegarder l'id étudiant
+    studentId.value = data.student_id
+
+    // Masquer l'email
+    maskedEmail.value = maskEmail(data.email ?? form.value.email)
+
+    // Construire le nom — évite le mélange ?? et ||
+    const rawName = data.full_name
+    const builtName = ((data.prenom ?? '') + ' ' + (data.nom ?? '')).trim()
+    studentInfo.value = {
+      name:    rawName || builtName || 'Étudiant',
+      filiere: data.filiere ?? '',
+      niveau:  data.niveau  ?? '',
+    }
 
     // Envoyer l'OTP automatiquement
-    await api.post('/auth/register/send-otp', {
-      preloaded_id: d.preloaded_id
-    })
+    await sendOtp()
 
-    toast.info(`Code OTP envoyé à ${d.masked_email}`)
+  } catch (err) {
+    console.error('[Register] Étape 1 erreur:', err.response?.data)
+    errorMsg.value = err.response?.data?.message ?? 'Erreur de vérification.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ENVOYER OTP
+// POST /api/v1/auth/send-otp
+// ══════════════════════════════════════════════════════════════════════════
+async function sendOtp() {
+  console.log('[sendOtp] student_id =', studentId.value)  // ← vérifier
+  console.log('[sendOtp] email =', form.value.email)
+
+  try {
+    const res = await api.post('/auth/send-otp', {
+      student_id: studentId.value,
+      email:      form.value.email.trim().toLowerCase(),
+    })
+    console.log('[sendOtp] réponse:', res.data)
+  } catch (err) {
+    console.error('[sendOtp] erreur:', err.response?.data)
+  } finally {
     step.value = 2
-
-  } catch (e) {
-    error.value = e.response?.data?.message || 'Erreur de vérification.'
-  } finally {
-    verifyLoading.value = false
+    startResendCooldown()
   }
 }
 
-// ── Renvoyer OTP ──────────────────────────────────────────────────────────
-async function resendOTP() {
-  if (!preloadedId.value) return
-  resendLoading.value = true
-  error.value = ''
+// ══════════════════════════════════════════════════════════════════════════
+// RENVOYER OTP
+// ══════════════════════════════════════════════════════════════════════════
+async function handleResendOtp() {
+  if (resendCooldown.value > 0) return
+  loading.value  = true
+  errorMsg.value = ''
   try {
-    await api.post('/auth/register/send-otp', {
-      preloaded_id: preloadedId.value
+    await api.post('/auth/send-otp', {
+      student_id: studentId.value,
+      email:      form.value.email.trim().toLowerCase(),
     })
-    toast.success('Nouveau code OTP envoyé !')
-  } catch (e) {
-    error.value = e.response?.data?.message || 'Erreur lors du renvoi.'
+    startResendCooldown()
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message ?? 'Erreur renvoi OTP.'
   } finally {
-    resendLoading.value = false
+    loading.value = false
   }
 }
 
-// ── Step 2 — Vérifier OTP ────────────────────────────────────────────────
-async function verifyOTP() {
-  const { valid } = await form2Ref.value.validate()
-  if (!valid) return
-  otpLoading.value = true
-  error.value = ''
+function startResendCooldown() {
+  resendCooldown.value = 60
+  clearInterval(cooldownTimer)
+  cooldownTimer = setInterval(() => {
+    resendCooldown.value--
+    if (resendCooldown.value <= 0) clearInterval(cooldownTimer)
+  }, 1000)
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ÉTAPE 2 — Vérifier OTP
+// POST /api/v1/auth/verify-otp
+// ══════════════════════════════════════════════════════════════════════════
+async function handleVerifyOtp() {
+  errorMsg.value = ''
+  if (!form.value.otp || form.value.otp.length < 6) {
+    errorMsg.value = 'Veuillez saisir le code à 6 chiffres.'
+    return
+  }
+  loading.value = true
   try {
-    const res = await api.post('/auth/register/verify-otp', {
-      preloaded_id: preloadedId.value,
-      otp_code:     form.value.otp_code,  // ✅ otp_code correspond au backend
+    await api.post('/auth/verify-otp', {
+      student_id: studentId.value,
+      otp_code:   form.value.otp,
     })
-    registrationToken.value = res.data.data?.registration_token
+
+    console.log('[Register] Étape 2 : OTP vérifié ✅')
+
+    // Passer à l'étape 3
     step.value = 3
-  } catch (e) {
-    error.value = e.response?.data?.message || 'Code OTP invalide.'
+
+  } catch (err) {
+    console.error('[Register] Étape 2 erreur:', err.response?.data)
+    errorMsg.value = err.response?.data?.message ?? 'Code OTP invalide.'
+    form.value.otp = ''
   } finally {
-    otpLoading.value = false
+    loading.value = false
   }
 }
 
-// ── Step 3 — Créer mot de passe ───────────────────────────────────────────
-async function setPassword() {
-  const { valid } = await form3Ref.value.validate()
-  if (!valid) return
-  passLoading.value = true
-  error.value = ''
+// ══════════════════════════════════════════════════════════════════════════
+// ÉTAPE 3 — Créer le compte
+// POST /api/v1/auth/register
+// ══════════════════════════════════════════════════════════════════════════
+async function handleSetPassword() {
+  errorMsg.value = ''
+
+  if (!form.value.password || form.value.password.length < 8) {
+    errorMsg.value = 'Le mot de passe doit contenir au moins 8 caractères.'
+    return
+  }
+  if (form.value.password !== form.value.passwordConfirm) {
+    errorMsg.value = 'Les mots de passe ne correspondent pas.'
+    return
+  }
+
+  loading.value = true
   try {
-    const res = await api.post('/auth/register/set-password', {
-      registration_token:    registrationToken.value,
+    const res = await api.post('/auth/register', {
+      student_id:            studentId.value,
       password:              form.value.password,
-      password_confirmation: form.value.password_confirmation,
+      password_confirmation: form.value.passwordConfirm,
     })
-    createdName.value = res.data.data?.user?.name || preloadedName.value
-    toast.success('Compte créé avec succès !')
+
+    const token = res.data?.token ?? res.data?.data?.token ?? null
+    const user  = res.data?.user  ?? res.data?.data?.user  ?? null
+
+    if (!token) {
+      errorMsg.value = 'Erreur: token manquant dans la réponse.'
+      return
+    }
+
+    // ✅ Utiliser setToken du store (clé = 'auth_token')
+    authStore.setToken(token)
+
+    // ✅ Charger l'utilisateur
+    if (user) {
+      authStore.user = user
+    } else {
+      try {
+        const meRes    = await api.get('/auth/me')
+        authStore.user = meRes.data?.data ?? meRes.data ?? null
+      } catch (e) {
+        console.warn('[Register] /auth/me error:', e)
+      }
+    }
+
+    // ✅ Marquer comme initialisé pour éviter double init
+    authStore.initialized = true
+
+    console.log('[Register] isAuthenticated =', authStore.isAuthenticated)
+    console.log('[Register] role =', authStore.user?.role)
+
+    // ✅ Afficher succès
     step.value = 4
-  } catch (e) {
-    error.value = e.response?.data?.message || 'Erreur lors de la création du compte.'
+
+    // ✅ Rediriger directement sans setTimeout
+    setTimeout(() => {
+      router.push({ name: 'student.dashboard' })
+    }, 2000)
+
+  } catch (err) {
+    console.error('[Register] erreur:', err.response?.data)
+    errorMsg.value = err.response?.data?.message ?? 'Erreur lors de la création du compte.'
   } finally {
-    passLoading.value = false
+    loading.value = false
   }
 }
+
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// HELPER — Masquer l'email
+// ══════════════════════════════════════════════════════════════════════════
+function maskEmail(email) {
+  if (!email) return '***@***.***'
+  const parts = email.split('@')
+  if (parts.length !== 2) return email
+  const user   = parts[0]
+  const domain = parts[1]
+  const visible = user.length > 3 ? user.slice(0, 3) : user.slice(0, 1)
+  return visible + '***@' + domain
+}
+
+onUnmounted(() => {
+  if (cooldownTimer) clearInterval(cooldownTimer)
+})
 </script>
+
+<style scoped>
+/* ── Page ── */
+.register-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a237e 0%, #283593 50%, #3949ab 100%);
+}
+
+/* ── Logo ── */
+.logo-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+.logo-img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* ── Stepper ── */
+.stepper { gap: 8px; }
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e0e0e0;
+  color: #757575;
+  font-weight: bold;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+.step-item.active .step-circle {
+  background: #1a237e;
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(26, 35, 126, 0.45);
+}
+.step-item.done .step-circle {
+  background: #4caf50;
+  color: #ffffff;
+}
+
+.step-label {
+  font-size: 11px;
+  color: #757575;
+  white-space: nowrap;
+}
+.step-item.active .step-label {
+  color: #1a237e;
+  font-weight: 600;
+}
+.step-item.done .step-label {
+  color: #4caf50;
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: #e0e0e0;
+  min-width: 30px;
+  margin-bottom: 18px;
+  transition: background 0.3s ease;
+}
+.step-line.done {
+  background: #4caf50;
+}
+</style>
