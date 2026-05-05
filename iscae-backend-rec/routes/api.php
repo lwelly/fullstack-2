@@ -41,6 +41,10 @@ Route::prefix('v1')->group(function () {
         // ── Connexion ──────────────────────────────────────────────
         Route::post('login', [AuthController::class, 'login']);
 
+        // ── Reconnaissance d'appareil (Device OTP) ────────────────
+        Route::post('verify-device-otp', [AuthController::class, 'verifyDeviceOtp']); // Valider OTP + enregistrer appareil
+        Route::post('resend-device-otp', [AuthController::class, 'resendDeviceOtp']); // Renvoyer OTP appareil
+
         // ── 2FA ────────────────────────────────────────────────────
         Route::prefix('2fa')->group(function () {
             Route::post('verify', [AuthController::class, 'verify2FA']);

@@ -4,16 +4,17 @@
 namespace App\Http\Controllers\API\Auth;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Models\Student;
+use App\Models\TrustedDevice;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use App\Models\User;
-use App\Models\Student;
 
 class AuthController extends Controller
 {
@@ -290,18 +291,23 @@ class AuthController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // CONNEXION
+    // CONNEXION — avec reconnaissance d'appareil
     // POST /api/v1/auth/login
     // ══════════════════════════════════════════════════════════════════
     public function login(Request $request): JsonResponse
     {
         $request->validate([
-            'login'    => 'required|string|max:255',
-            'password' => 'required|string',
+            'login'              => 'required|string|max:255',
+            'password'           => 'required|string',
+            'device_fingerprint' => 'nullable|string|max:64',
         ]);
 
         $loginValue = trim($request->input('login'));
+        $deviceFp   = trim($request->input('device_fingerprint', ''));
+        $ip         = $request->ip();
+        $userAgent  = $request->userAgent() ?? '';
 
+        // ── 1. Trouver l'utilisateur ──────────────────────────────────
         $user = User::where('login_identifier', $loginValue)
                     ->orWhere('email', $loginValue)
                     ->first();
@@ -313,9 +319,17 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // ── 2. Vérifier le mot de passe ───────────────────────────────
         if (! Hash::check($request->input('password'), $user->password)) {
             if (isset($user->failed_login_count)) {
                 $user->increment('failed_login_count');
+                if ($user->failed_login_count >= 5) {
+                    $user->update(['locked_until' => now()->addMinutes(15)]);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Compte bloqué 15 min suite à trop de tentatives échouées.',
+                    ], 423);
+                }
             }
             return response()->json([
                 'success' => false,
@@ -323,13 +337,16 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // ── 3. Vérifier le verrouillage ───────────────────────────────
         if (! empty($user->locked_until) && now()->lt($user->locked_until)) {
+            $minutes = now()->diffInMinutes($user->locked_until);
             return response()->json([
                 'success' => false,
-                'message' => 'Compte temporairement verrouillé. Réessayez plus tard.',
+                'message' => "Compte bloqué. Réessayez dans {$minutes} minute(s).",
             ], 423);
         }
 
+        // ── 4. Vérifier si le compte est actif ────────────────────────
         if (isset($user->is_active) && ! $user->is_active) {
             return response()->json([
                 'success' => false,
@@ -337,6 +354,84 @@ class AuthController extends Controller
             ], 403);
         }
 
+        // ── 5. Réinitialiser les tentatives échouées ──────────────────
+        $updateData = ['failed_login_count' => 0, 'locked_until' => null];
+
+        // ── 6. Vérifier si l'appareil est reconnu ────────────────────
+        $isTrusted = false;
+
+        if ($deviceFp) {
+            $trusted = TrustedDevice::where('user_id', $user->id)
+                ->where('device_fingerprint', $deviceFp)
+                ->valid()
+                ->first();
+
+            if ($trusted) {
+                $trusted->update([
+                    'last_used_at' => now(),
+                    'ip_address'   => $ip,
+                    'expires_at'   => now()->addDays(30),
+                ]);
+                $isTrusted = true;
+            }
+        }
+
+        // ── 7. Si appareil non reconnu → envoyer OTP ─────────────────
+        if (! $isTrusted) {
+            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $user->email],
+                ['token' => Hash::make($code), 'created_at' => now()]
+            );
+
+            // ✅ Adresse de réception : notification_email en priorité
+            $sendTo     = $user->notification_email ?? $user->email;
+            $deviceInfo = $this->parseUserAgent($userAgent);
+
+            try {
+                Mail::raw(
+                    "Bonjour,\n\n" .
+                    "Une tentative de connexion a été détectée depuis un nouvel appareil :\n" .
+                    "• Appareil : {$deviceInfo}\n" .
+                    "• IP       : {$ip}\n\n" .
+                    "Votre code de vérification : {$code}\n\n" .
+                    "Ce code expire dans 10 minutes.\n\n" .
+                    "Si ce n'est pas vous, ignorez ce message.",
+                    fn($m) => $m->to($sendTo)
+                                ->subject('🔐 Connexion nouvel appareil – ISCAE')
+                );
+
+                Log::info('[login] OTP envoyé (nouvel appareil)', [
+                    'user_id' => $user->id,
+                    'send_to' => $sendTo,
+                    'ip'      => $ip,
+                    'device'  => $deviceFp ?: 'inconnu',
+                ]);
+            } catch (\Exception $e) {
+                Log::error('[login] Erreur envoi OTP', [
+                    'error'   => $e->getMessage(),
+                    'send_to' => $sendTo,
+                ]);
+                // On continue pour ne pas bloquer la connexion
+            }
+
+            return response()->json([
+                'success'             => false,
+                'requires_device_otp' => true,
+                'message'             => 'Nouvel appareil détecté. Code OTP envoyé par email.',
+                'data'                => [
+                    'user_id'      => $user->id,
+                    'masked_email' => $this->maskEmail($sendTo),
+                ],
+            ], 200);
+        }
+
+        // ── 8. Connexion directe (appareil reconnu) ───────────────────
+        $updateData['last_login_at'] = now();
+        $user->update($updateData);
+
+        // 2FA activé ?
         if (! empty($user->two_factor_enabled)) {
             return response()->json([
                 'success'      => true,
@@ -346,15 +441,9 @@ class AuthController extends Controller
             ], 200);
         }
 
-        $updateData = ['last_login_at' => now()];
-        if (isset($user->failed_login_count)) {
-            $updateData['failed_login_count'] = 0;
-        }
-        $user->update($updateData);
-
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        Log::info('[Auth] login OK', [
+        Log::info('[login] Connexion réussie (appareil reconnu)', [
             'user_id' => $user->id,
             'role'    => $user->role,
         ]);
@@ -365,6 +454,177 @@ class AuthController extends Controller
             'token'   => $token,
             'user'    => $this->buildUserPayload($user),
         ], 200);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // VERIFY DEVICE OTP — Valider OTP + enregistrer l'appareil
+    // POST /api/v1/auth/verify-device-otp
+    // ══════════════════════════════════════════════════════════════════
+    public function verifyDeviceOtp(Request $request): JsonResponse
+    {
+        $request->validate([
+            'user_id'            => 'required|integer',
+            'otp_code'           => 'required|string|size:6',
+            'device_fingerprint' => 'nullable|string|max:64',
+            'device_name'        => 'nullable|string|max:100',
+        ]);
+
+        $user = User::find($request->user_id);
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Utilisateur introuvable.',
+            ], 404);
+        }
+
+        // ── Vérifier OTP ──────────────────────────────────────────────
+        $record = DB::table('password_reset_tokens')
+            ->where('email', $user->email)
+            ->first();
+
+        if (! $record) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Code introuvable. Veuillez refaire la connexion.',
+            ], 422);
+        }
+
+        if (now()->diffInMinutes($record->created_at) > 10) {
+            DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+            return response()->json([
+                'success' => false,
+                'message' => 'Code expiré. Veuillez refaire la connexion.',
+            ], 422);
+        }
+
+        if (! Hash::check($request->otp_code, $record->token)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Code incorrect.',
+            ], 422);
+        }
+
+        // ── Supprimer OTP utilisé ─────────────────────────────────────
+        DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+
+        // ── Enregistrer l'appareil comme fiable ───────────────────────
+        $deviceFp = trim($request->input('device_fingerprint', ''));
+        if ($deviceFp) {
+            TrustedDevice::updateOrCreate(
+                [
+                    'user_id'            => $user->id,
+                    'device_fingerprint' => $deviceFp,
+                ],
+                [
+                    'device_name'  => $request->input('device_name')
+                                      ?? $this->parseUserAgent($request->userAgent() ?? ''),
+                    'ip_address'   => $request->ip(),
+                    'user_agent'   => $request->userAgent(),
+                    'last_used_at' => now(),
+                    'expires_at'   => now()->addDays(30),
+                ]
+            );
+
+            Log::info('[verifyDeviceOtp] Appareil enregistré', [
+                'user_id' => $user->id,
+                'device'  => $deviceFp,
+            ]);
+        }
+
+        // ── 2FA activé ? ──────────────────────────────────────────────
+        if (! empty($user->two_factor_enabled)) {
+            return response()->json([
+                'success'      => true,
+                'requires_2fa' => true,
+                'user_id'      => $user->id,
+                'login_type'   => $user->role,
+            ], 200);
+        }
+
+        // ── Générer token de connexion ────────────────────────────────
+        $user->update([
+            'last_login_at'      => now(),
+            'failed_login_count' => 0,
+            'locked_until'       => null,
+        ]);
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        Log::info('[verifyDeviceOtp] Connexion réussie', ['user_id' => $user->id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Connexion réussie. Appareil enregistré pour 30 jours.',
+            'token'   => $token,
+            'user'    => $this->buildUserPayload($user),
+        ]);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // RESEND DEVICE OTP — Renvoyer le code de vérification appareil
+    // POST /api/v1/auth/resend-device-otp
+    // ══════════════════════════════════════════════════════════════════
+    public function resendDeviceOtp(Request $request): JsonResponse
+    {
+        $request->validate([
+            'user_id' => 'required|integer',
+        ]);
+
+        $user = User::find($request->user_id);
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Utilisateur introuvable.',
+            ], 404);
+        }
+
+        // ── Vérifier le cooldown (1 minute) ──────────────────────────
+        $existing = DB::table('password_reset_tokens')
+            ->where('email', $user->email)
+            ->first();
+
+        if ($existing && now()->diffInSeconds($existing->created_at) < 60) {
+            $wait = 60 - now()->diffInSeconds($existing->created_at);
+            return response()->json([
+                'success' => false,
+                'message' => "Attendez {$wait} seconde(s) avant de renvoyer.",
+            ], 429);
+        }
+
+        // ── Générer et envoyer un nouveau code ────────────────────────
+        $code   = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $sendTo = $user->notification_email ?? $user->email; // ✅ Gmail en priorité
+
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $user->email],
+            ['token' => Hash::make($code), 'created_at' => now()]
+        );
+
+        try {
+            Mail::raw(
+                "Bonjour,\n\n" .
+                "Votre nouveau code de vérification ISCAE : {$code}\n\n" .
+                "Ce code expire dans 10 minutes.",
+                fn($m) => $m->to($sendTo)
+                            ->subject('🔐 Nouveau code de vérification – ISCAE')
+            );
+
+            Log::info('[resendDeviceOtp] Code renvoyé', [
+                'user_id' => $user->id,
+                'send_to' => $sendTo,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('[resendDeviceOtp] Erreur mail', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'envoi de l\'email.',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Nouveau code envoyé par email.',
+        ]);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -439,170 +699,255 @@ class AuthController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════
+    // RESEND OTP — 2FA classique
+    // POST /api/v1/auth/2fa/resend
+    // ══════════════════════════════════════════════════════════════════
+    public function resendOtp(Request $request): JsonResponse
+    {
+        $request->validate([
+            'user_id'    => 'required|integer',
+            'login_type' => 'nullable|string',
+        ]);
+
+        $user = User::find($request->user_id);
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Utilisateur introuvable.',
+            ], 404);
+        }
+
+        $code   = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $sendTo = $user->notification_email ?? $user->email; // ✅ Gmail en priorité
+
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $user->email],
+            ['token' => Hash::make($code), 'created_at' => now()]
+        );
+
+        try {
+            Mail::raw(
+                "Votre code 2FA ISCAE : {$code}\n\nCe code expire dans 10 minutes.",
+                fn($m) => $m->to($sendTo)->subject('Code 2FA – ISCAE')
+            );
+            Log::info('[resendOtp] Code 2FA envoyé', [
+                'user_id' => $user->id,
+                'send_to' => $sendTo,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('[resendOtp] Erreur mail', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'envoi.',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Code renvoyé par email.',
+        ]);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     // MOT DE PASSE OUBLIÉ — Étape 1 : Envoyer OTP
     // POST /api/v1/auth/forgot-password
     // ══════════════════════════════════════════════════════════════════
-   public function forgotPassword(Request $request): JsonResponse
-{
-    $request->validate([
-        'email' => 'required|email|max:255',
-    ]);
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email|max:255',
+        ]);
 
-    $email = strtolower(trim($request->email));
+        $email = strtolower(trim($request->email));
 
-    // Chercher d'abord un User directement (admin ou autre)
-    $user = \App\Models\User::whereRaw('LOWER(email) = ?', [$email])
-        ->where('is_active', true)
-        ->first();
-
-    if (! $user) {
-        // Chercher aussi via la table students (email peut différer)
-        $student = \App\Models\Student::whereRaw('LOWER(email) = ?', [$email])
-            ->whereNotNull('user_id')
+        // Chercher un User directement (admin ou étudiant)
+        $user = User::whereRaw('LOWER(email) = ?', [$email])
+            ->where('is_active', true)
             ->first();
-        if ($student) {
-            $user = \App\Models\User::find($student->user_id);
+
+        if (! $user) {
+            // Chercher aussi via notification_email
+            $user = User::whereRaw('LOWER(notification_email) = ?', [$email])
+                ->where('is_active', true)
+                ->first();
         }
-    }
 
-    if (! $user) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Aucun compte trouvé avec cet email.',
-        ], 404);
-    }
+        if (! $user) {
+            // Chercher via la table students
+            $student = Student::whereRaw('LOWER(email) = ?', [$email])
+                ->whereNotNull('user_id')
+                ->first();
+            if ($student) {
+                $user = User::find($student->user_id);
+            }
+        }
 
-    // Générer OTP 6 chiffres
-    $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Aucun compte trouvé avec cet email.',
+            ], 404);
+        }
 
-    DB::table('password_reset_tokens')->updateOrInsert(
-        ['email' => $user->email],
-        ['token' => Hash::make($code), 'created_at' => now()]
-    );
+        $code   = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $sendTo = $user->notification_email ?? $user->email; // ✅ Gmail en priorité
 
-    try {
-        Mail::raw(
-            "Bonjour,\n\nVotre code de réinitialisation ISCAE : {$code}\n\nCe code expire dans 10 minutes.\n\nSi vous n'avez pas demandé cette réinitialisation, ignorez ce message.",
-            fn ($m) => $m->to($user->email)->subject('Code de réinitialisation – ISCAE')
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $user->email],
+            ['token' => Hash::make($code), 'created_at' => now()]
         );
-        Log::info('[forgotPassword] OTP envoyé', ['email' => $user->email, 'role' => $user->role]);
-    } catch (\Exception $e) {
-        Log::error('[forgotPassword] Erreur mail', ['error' => $e->getMessage()]);
-        return response()->json(['success' => false, 'message' => 'Erreur lors de l\'envoi de l\'email.'], 500);
+
+        try {
+            Mail::raw(
+                "Bonjour,\n\n" .
+                "Votre code de réinitialisation ISCAE : {$code}\n\n" .
+                "Ce code expire dans 10 minutes.\n\n" .
+                "Si vous n'avez pas demandé cette réinitialisation, ignorez ce message.",
+                fn($m) => $m->to($sendTo)
+                            ->subject('🔑 Code de réinitialisation – ISCAE')
+            );
+            Log::info('[forgotPassword] OTP envoyé', [
+                'email'   => $user->email,
+                'send_to' => $sendTo,
+                'role'    => $user->role,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('[forgotPassword] Erreur mail', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'envoi de l\'email.',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Code envoyé par email.',
+            'data'    => [
+                'masked_email' => $this->maskEmail($sendTo),
+                'user_id'      => $user->id,
+            ],
+        ]);
     }
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Code envoyé par email.',
-        'data'    => [
-            'masked_email' => $this->maskEmail($user->email),
-            'user_id'      => $user->id,
-        ],
-    ]);
-}
-
 
     // ══════════════════════════════════════════════════════════════════
     // MOT DE PASSE OUBLIÉ — Étape 2 : Vérifier OTP
     // POST /api/v1/auth/forgot-password/verify-otp
     // ══════════════════════════════════════════════════════════════════
-  public function forgotVerifyOtp(Request $request): JsonResponse
-{
-    $request->validate([
-        'user_id'  => 'required|integer',
-        'otp_code' => 'required|string|size:6',
-    ]);
+    public function forgotVerifyOtp(Request $request): JsonResponse
+    {
+        $request->validate([
+            'user_id'  => 'required|integer',
+            'otp_code' => 'required|string|size:6',
+        ]);
 
-    $user = \App\Models\User::find($request->user_id);
-    if (! $user) {
-        return response()->json(['success' => false, 'message' => 'Utilisateur introuvable.'], 404);
+        $user = User::find($request->user_id);
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Utilisateur introuvable.',
+            ], 404);
+        }
+
+        $record = DB::table('password_reset_tokens')
+            ->where('email', $user->email)
+            ->first();
+
+        if (! $record) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Code introuvable. Veuillez refaire la demande.',
+            ], 422);
+        }
+
+        if (now()->diffInMinutes($record->created_at) > 10) {
+            DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+            return response()->json([
+                'success' => false,
+                'message' => 'Code expiré. Veuillez refaire la demande.',
+            ], 422);
+        }
+
+        if (! Hash::check($request->otp_code, $record->token)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Code incorrect.',
+            ], 422);
+        }
+
+        // Générer un reset_token temporaire (valable 15 min)
+        $resetToken = Str::random(64);
+        DB::table('password_reset_tokens')->where('email', $user->email)->update([
+            'token'      => Hash::make($resetToken),
+            'created_at' => now(),
+        ]);
+
+        Log::info('[forgotVerifyOtp] OTP validé', ['user_id' => $user->id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Code vérifié avec succès.',
+            'data'    => ['reset_token' => $resetToken],
+        ]);
     }
-
-    $record = DB::table('password_reset_tokens')
-        ->where('email', $user->email)
-        ->first();
-
-    if (! $record) {
-        return response()->json(['success' => false, 'message' => 'Code introuvable. Veuillez refaire la demande.'], 422);
-    }
-
-    if (now()->diffInMinutes($record->created_at) > 10) {
-        DB::table('password_reset_tokens')->where('email', $user->email)->delete();
-        return response()->json(['success' => false, 'message' => 'Code expiré. Veuillez refaire la demande.'], 422);
-    }
-
-    if (! Hash::check($request->otp_code, $record->token)) {
-        return response()->json(['success' => false, 'message' => 'Code incorrect.'], 422);
-    }
-
-    // Générer un reset_token temporaire
-    $resetToken = \Illuminate\Support\Str::random(64);
-    DB::table('password_reset_tokens')->where('email', $user->email)->update([
-        'token'      => Hash::make($resetToken),
-        'created_at' => now(),
-    ]);
-
-    Log::info('[forgotVerifyOtp] OTP validé', ['user_id' => $user->id]);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Code vérifié avec succès.',
-        'data'    => ['reset_token' => $resetToken],
-    ]);
-}
-
 
     // ══════════════════════════════════════════════════════════════════
     // MOT DE PASSE OUBLIÉ — Étape 3 : Nouveau mot de passe
     // POST /api/v1/auth/reset-password
     // ══════════════════════════════════════════════════════════════════
-   public function resetPassword(Request $request): JsonResponse
-{
-    $request->validate([
-        'reset_token'           => 'required|string',
-        'password'              => 'required|string|min:8|confirmed',
-        'password_confirmation' => 'required|string',
-    ]);
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'reset_token'           => 'required|string',
+            'password'              => 'required|string|min:8|confirmed',
+            'password_confirmation' => 'required|string',
+        ]);
 
-    // Trouver le bon enregistrement en parcourant les tokens
-    $record = null;
-    $targetUser = null;
+        $record     = null;
+        $targetUser = null;
 
-    $allTokens = DB::table('password_reset_tokens')->get();
-    foreach ($allTokens as $row) {
-        if (Hash::check($request->reset_token, $row->token)) {
-            $record = $row;
-            $targetUser = \App\Models\User::where('email', $row->email)->first();
-            break;
+        // Parcourir les tokens pour trouver le bon
+        $allTokens = DB::table('password_reset_tokens')->get();
+        foreach ($allTokens as $row) {
+            if (Hash::check($request->reset_token, $row->token)) {
+                $record     = $row;
+                $targetUser = User::where('email', $row->email)->first();
+                break;
+            }
         }
-    }
 
-    if (! $record || ! $targetUser) {
-        return response()->json(['success' => false, 'message' => 'Token invalide ou expiré.'], 422);
-    }
+        if (! $record || ! $targetUser) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token invalide ou expiré.',
+            ], 422);
+        }
 
-    if (now()->diffInMinutes($record->created_at) > 15) {
+        if (now()->diffInMinutes($record->created_at) > 15) {
+            DB::table('password_reset_tokens')->where('email', $record->email)->delete();
+            return response()->json([
+                'success' => false,
+                'message' => 'Token expiré. Veuillez recommencer.',
+            ], 422);
+        }
+
+        // Mettre à jour le mot de passe
+        $targetUser->update(['password' => Hash::make($request->password)]);
+
+        // Révoquer tous les tokens Sanctum
+        $targetUser->tokens()->delete();
+
+        // Supprimer le reset token
         DB::table('password_reset_tokens')->where('email', $record->email)->delete();
-        return response()->json(['success' => false, 'message' => 'Token expiré. Veuillez recommencer.'], 422);
+
+        Log::info('[resetPassword] Mot de passe réinitialisé', [
+            'user_id' => $targetUser->id,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Mot de passe réinitialisé avec succès.',
+        ]);
     }
-
-    // Mettre à jour le mot de passe
-    $targetUser->update(['password' => Hash::make($request->password)]);
-
-    // Révoquer tous les tokens Sanctum
-    $targetUser->tokens()->delete();
-
-    // Supprimer le reset token
-    DB::table('password_reset_tokens')->where('email', $record->email)->delete();
-
-    Log::info('[resetPassword] Mot de passe réinitialisé', ['user_id' => $targetUser->id]);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Mot de passe réinitialisé avec succès.',
-    ]);
-}
-
 
     // ══════════════════════════════════════════════════════════════════
     // HELPER PRIVÉ — Construire le payload user
@@ -641,13 +986,14 @@ class AuthController extends Controller
         }
 
         return array_filter([
-            'id'               => $user->id,
-            'email'            => $user->email,
-            'login_identifier' => $user->login_identifier,
-            'role'             => $user->role,
-            'is_active'        => $user->is_active ?? true,
-            'last_login_at'    => $user->last_login_at,
-            'student'          => $studentData,
+            'id'                 => $user->id,
+            'email'              => $user->email,
+            'notification_email' => $user->notification_email ?? null, // ✅ exposé
+            'login_identifier'   => $user->login_identifier,
+            'role'               => $user->role,
+            'is_active'          => $user->is_active ?? true,
+            'last_login_at'      => $user->last_login_at,
+            'student'            => $studentData,
         ], fn($v) => $v !== null);
     }
 
@@ -658,7 +1004,22 @@ class AuthController extends Controller
     {
         $parts = explode('@', $email);
         if (count($parts) !== 2) return $email;
-        $visible = strlen($parts[0]) > 3 ? substr($parts[0], 0, 3) : substr($parts[0], 0, 1);
+        $visible = strlen($parts[0]) > 3
+            ? substr($parts[0], 0, 3)
+            : substr($parts[0], 0, 1);
         return $visible . '***@' . $parts[1];
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // HELPER PRIVÉ — Parser le User-Agent
+    // ══════════════════════════════════════════════════════════════════
+    private function parseUserAgent(string $ua): string
+    {
+        if (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) return 'iOS';
+        if (str_contains($ua, 'Android'))  return 'Android';
+        if (str_contains($ua, 'Windows'))  return 'Windows';
+        if (str_contains($ua, 'Macintosh')) return 'macOS';
+        if (str_contains($ua, 'Linux'))    return 'Linux';
+        return 'Navigateur inconnu';
     }
 }
