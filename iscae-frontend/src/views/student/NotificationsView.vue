@@ -1,1005 +1,621 @@
 <template>
-  <div class="notif-page">
+  <v-container fluid class="pa-4 pa-md-6" style="background:#f5f7ff; min-height:100vh;">
 
-    <!-- ══════════════════════════════════════════════════════════════
-         EN-TÊTE
-    ══════════════════════════════════════════════════════════════════ -->
-    <div class="page-header mb-6">
-      <div class="d-flex align-center justify-space-between flex-wrap gap-3">
-        <div>
-          <h1 class="page-title">
-            <span class="title-icon-wrapper">
-              <v-icon size="22" color="white">mdi-bell</v-icon>
-            </span>
-            Notifications
-          </h1>
-          <p class="page-subtitle">
-            {{ meta.unread_count > 0
-                ? `${meta.unread_count} notification${meta.unread_count > 1 ? 's' : ''} non lue${meta.unread_count > 1 ? 's' : ''}`
-                : 'Toutes les notifications sont lues ✓' }}
-          </p>
-        </div>
+    <!-- ═══ EN-TÊTE ══════════════════════════════════════════════════ -->
+    <div class="d-flex align-center justify-space-between mb-6 flex-wrap gap-3">
+      <div>
+        <h1 style="font-size:1.5rem; font-weight:800; color:#1a237e;">
+          Notifications
+        </h1>
+        <p style="font-size:0.82rem; color:#90a4ae; margin:0;">
+          {{ unreadCount }} non lue{{ unreadCount !== 1 ? 's' : '' }}
+        </p>
+      </div>
+
+      <!-- Actions -->
+      <div class="d-flex align-center gap-2">
         <v-btn
-          v-if="meta.unread_count > 0"
+          v-if="unreadCount > 0"
           variant="tonal"
           color="primary"
-          size="small"
-          :loading="markingAll"
-          prepend-icon="mdi-check-all"
           rounded="lg"
+          size="small"
+          prepend-icon="mdi-check-all"
+          :loading="markingAll"
           @click="markAllRead"
         >
           Tout marquer lu
         </v-btn>
+        <v-btn
+          variant="tonal"
+          color="error"
+          rounded="lg"
+          size="small"
+          prepend-icon="mdi-delete-sweep-outline"
+          :disabled="!notifications.length"
+          @click="confirmClearAll = true"
+        >
+          Tout effacer
+        </v-btn>
       </div>
     </div>
 
-    <!-- ══════════════════════════════════════════════════════════════
-         FILTRES
-    ══════════════════════════════════════════════════════════════════ -->
-    <div class="filter-tabs mb-5">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        class="filter-tab"
-        :class="{ 'filter-tab--active': activeFilter === tab.key }"
-        @click="setFilter(tab.key)"
-      >
-        <v-icon size="15" class="mr-1">{{ tab.icon }}</v-icon>
-        {{ tab.label }}
-        <span class="tab-badge">
-          {{ tab.key === 'all'
-              ? meta.total
-              : tab.key === 'unread'
-                ? meta.unread_count
-                : (meta.total - meta.unread_count) }}
-        </span>
-      </button>
-    </div>
-
-    <!-- Debug -->
-    <v-alert
-      v-if="debugInfo"
-      type="info"
-      variant="tonal"
-      density="compact"
-      class="mb-4"
-      closable
-      rounded="lg"
-      @click:close="debugInfo = ''"
-    >
-      <pre style="font-size:0.72rem;white-space:pre-wrap;">{{ debugInfo }}</pre>
-    </v-alert>
-
-    <!-- ══════════════════════════════════════════════════════════════
-         CHARGEMENT
-    ══════════════════════════════════════════════════════════════════ -->
-    <div v-if="loading" class="state-box">
-      <v-progress-circular indeterminate color="primary" size="44" width="3" />
-      <p class="state-text mt-3">Chargement des notifications…</p>
-    </div>
-
-    <!-- ══════════════════════════════════════════════════════════════
-         VIDE
-    ══════════════════════════════════════════════════════════════════ -->
-    <div v-else-if="filteredList.length === 0" class="state-box">
-      <div class="empty-icon">
-        <v-icon size="40" color="#94A3B8">mdi-bell-off-outline</v-icon>
-      </div>
-      <p class="empty-title mt-3">Aucune notification</p>
-      <p class="state-text">
-        {{ activeFilter === 'unread'
-            ? "Aucune notification non lue."
-            : "Vous n'avez pas encore reçu de notification." }}
-      </p>
-      <v-btn
-        variant="tonal"
-        color="primary"
-        size="small"
-        class="mt-3"
-        prepend-icon="mdi-refresh"
-        rounded="lg"
-        @click="load(1)"
-      >
-        Actualiser
-      </v-btn>
-    </div>
-
-    <!-- ══════════════════════════════════════════════════════════════
-         LISTE
-    ══════════════════════════════════════════════════════════════════ -->
-    <div v-else class="notif-list">
-
-      <!-- Aujourd'hui -->
-      <template v-if="groupToday.length">
-        <div class="group-label">
-          <v-icon size="13" class="mr-1">mdi-calendar-today</v-icon>
-          Aujourd'hui
-        </div>
-        <div
-          v-for="n in groupToday" :key="n.id"
-          class="notif-card"
-          :class="{ 'notif-card--unread': !n.is_read }"
-          @click="handleClick(n)"
+    <!-- ═══ FILTRES ══════════════════════════════════════════════════ -->
+    <v-card rounded="lg" elevation="0" border class="pa-3 mb-5">
+      <div class="d-flex align-center gap-2 flex-wrap">
+        <v-btn
+          v-for="tab in tabs"
+          :key="tab.value"
+          :variant="activeTab === tab.value ? 'flat' : 'text'"
+          :color="activeTab === tab.value ? 'primary' : 'grey'"
+          rounded="lg"
+          size="small"
+          @click="activeTab = tab.value"
         >
-          <NotifRow :notif="n" @mark-read="markRead" @delete="deleteNotif" />
-        </div>
-      </template>
-
-      <!-- Cette semaine -->
-      <template v-if="groupWeek.length">
-        <div class="group-label mt-4">
-          <v-icon size="13" class="mr-1">mdi-calendar-week</v-icon>
-          Cette semaine
-        </div>
-        <div
-          v-for="n in groupWeek" :key="n.id"
-          class="notif-card"
-          :class="{ 'notif-card--unread': !n.is_read }"
-          @click="handleClick(n)"
-        >
-          <NotifRow :notif="n" @mark-read="markRead" @delete="deleteNotif" />
-        </div>
-      </template>
-
-      <!-- Plus ancien -->
-      <template v-if="groupOlder.length">
-        <div class="group-label mt-4">
-          <v-icon size="13" class="mr-1">mdi-calendar-range</v-icon>
-          Plus ancien
-        </div>
-        <div
-          v-for="n in groupOlder" :key="n.id"
-          class="notif-card"
-          :class="{ 'notif-card--unread': !n.is_read }"
-          @click="handleClick(n)"
-        >
-          <NotifRow :notif="n" @mark-read="markRead" @delete="deleteNotif" />
-        </div>
-      </template>
-
-      <!-- Pagination -->
-      <div v-if="meta.last_page > 1" class="pagination mt-5">
-        <button
-          class="page-arrow"
-          :disabled="meta.current_page <= 1"
-          @click="loadPage(meta.current_page - 1)"
-        >
-          <v-icon size="18">mdi-chevron-left</v-icon>
-        </button>
-        <button
-          v-for="p in paginationPages"
-          :key="p"
-          class="page-btn"
-          :class="{
-            'page-btn--active':    p === meta.current_page,
-            'page-btn--ellipsis':  p === '…',
-          }"
-          :disabled="p === '…'"
-          @click="p !== '…' && loadPage(p)"
-        >{{ p }}</button>
-        <button
-          class="page-arrow"
-          :disabled="meta.current_page >= meta.last_page"
-          @click="loadPage(meta.current_page + 1)"
-        >
-          <v-icon size="18">mdi-chevron-right</v-icon>
-        </button>
-      </div>
-    </div>
-
-    <!-- ══════════════════════════════════════════════════════════════
-         DIALOG DÉTAIL
-    ══════════════════════════════════════════════════════════════════ -->
-    <v-dialog v-model="detailDialog" max-width="540" rounded="xl">
-      <v-card v-if="selectedNotif" class="detail-card" rounded="xl">
-
-        <!-- Bandeau coloré -->
-        <div
-          class="detail-banner"
-          :style="{ background: `linear-gradient(135deg, ${typeColor(selectedNotif.type)}, ${typeColor(selectedNotif.type)}cc)` }"
-        >
-          <div class="detail-banner-icon">
-            <v-icon color="white" size="28">{{ typeIcon(selectedNotif.type) }}</v-icon>
-          </div>
-          <div class="detail-banner-text">
-            <div class="detail-type-label">{{ typeLabel(selectedNotif.type) }}</div>
-            <div class="detail-title">{{ selectedNotif.title }}</div>
-            <div class="detail-date">
-              <v-icon size="12" class="mr-1">mdi-clock-outline</v-icon>
-              {{ fDateTime(selectedNotif.created_at) }}
-            </div>
-          </div>
-          <v-btn
-            icon="mdi-close"
-            variant="text"
-            color="white"
-            size="small"
-            class="detail-close"
-            @click="detailDialog = false"
+          {{ tab.label }}
+          <v-badge
+            v-if="tab.count > 0"
+            :content="tab.count"
+            :color="activeTab === tab.value ? 'white' : 'primary'"
+            inline
+            class="ml-1"
           />
-        </div>
+        </v-btn>
+      </div>
+    </v-card>
 
-        <!-- Corps -->
-        <v-card-text class="detail-body pa-5">
+    <!-- ═══ LOADING ══════════════════════════════════════════════════ -->
+    <div v-if="loading" class="d-flex justify-center align-center py-16">
+      <v-progress-circular indeterminate color="primary" size="40" />
+    </div>
 
-          <!-- Message -->
-          <div class="detail-message-box">
-            <v-icon size="16" color="#94A3B8" class="mr-2">mdi-message-text-outline</v-icon>
-            <p class="detail-message">{{ selectedNotif.body }}</p>
-          </div>
+    <!-- ═══ VIDE ══════════════════════════════════════════════════════ -->
+    <v-card
+      v-else-if="!filteredList.length"
+      rounded="lg" elevation="0" border
+      class="pa-12 text-center"
+    >
+      <v-icon size="56" color="blue-grey-lighten-3" class="mb-3">
+        mdi-bell-off-outline
+      </v-icon>
+      <div style="font-size:1rem; font-weight:700; color:#455a64;">
+        Aucune notification
+      </div>
+      <div style="font-size:0.82rem; color:#90a4ae; margin-top:6px;">
+        {{
+          activeTab === 'unread'
+            ? 'Vous avez lu toutes vos notifications.'
+            : 'Vous n\'avez pas encore reçu de notifications.'
+        }}
+      </div>
+    </v-card>
 
-          <!-- Données supplémentaires -->
-          <div
-            v-if="selectedNotif.data && Object.keys(selectedNotif.data).length > 0"
-            class="detail-meta mt-4"
-          >
-            <p class="detail-meta-title">
-              <v-icon size="14" class="mr-1">mdi-information-outline</v-icon>
-              Détails
-            </p>
-            <div class="detail-meta-grid">
-              <template v-for="(val, key) in selectedNotif.data" :key="key">
-                <div v-if="val && key !== 'reclamation_id'" class="meta-row">
-                  <span class="meta-key">{{ dataKeyLabel(key) }}</span>
-                  <v-chip
-                    v-if="key.includes('status')"
-                    :color="statusColor(val)"
-                    size="x-small"
-                    variant="tonal"
-                  >
-                    {{ statusLabel(val) }}
-                  </v-chip>
-                  <span v-else class="meta-val">{{ val }}</span>
-                </div>
-              </template>
-            </div>
-          </div>
+    <!-- ═══ LISTE ═════════════════════════════════════════════════════ -->
+    <div v-else class="d-flex flex-column ga-2">
 
-          <!-- Statut lecture -->
-          <div class="detail-read-status mt-4">
-            <v-icon
-              size="15"
-              :color="selectedNotif.is_read ? 'success' : 'warning'"
-              class="mr-1"
+      <!-- Groupe par date -->
+      <template v-for="group in groupedList" :key="group.date">
+
+        <!-- Label date -->
+        <div class="date-label">{{ group.date }}</div>
+
+        <!-- Notifications du groupe -->
+        <v-card
+          v-for="notif in group.items"
+          :key="notif.id"
+          rounded="lg"
+          elevation="0"
+          border
+          class="notif-card"
+          :class="{ 'notif-card--unread': !notif.read_at }"
+          @click="handleClick(notif)"
+        >
+          <div class="d-flex align-start pa-4 gap-3">
+
+            <!-- Icône -->
+            <div
+              class="notif-icon flex-shrink-0"
+              :style="{ background: notifBg(notif.type) }"
             >
-              {{ selectedNotif.is_read ? 'mdi-check-circle' : 'mdi-circle-outline' }}
-            </v-icon>
-            <span class="text-caption text-medium-emphasis">
-              {{ selectedNotif.is_read
-                  ? `Lu le ${fDateTime(selectedNotif.read_at)}`
-                  : 'Non lu' }}
-            </span>
+              <v-icon :color="notifColor(notif.type)" size="18">
+                {{ notifIcon(notif.type) }}
+              </v-icon>
+            </div>
+
+            <!-- Contenu -->
+            <div class="flex-grow-1" style="min-width:0;">
+              <!-- Titre + badge non lu -->
+              <div class="d-flex align-center justify-space-between gap-2 mb-1">
+                <span class="notif-title">
+                  {{ notif.title ?? notif.data?.title ?? 'Notification' }}
+                </span>
+                <div class="d-flex align-center gap-2 flex-shrink-0">
+                  <span
+                    v-if="!notif.read_at"
+                    class="unread-dot"
+                  />
+                  <v-chip
+                    :color="notifColor(notif.type)"
+                    variant="tonal"
+                    size="x-small"
+                    label
+                  >
+                    {{ notifTypeLabel(notif.type) }}
+                  </v-chip>
+                </div>
+              </div>
+
+              <!-- Message -->
+              <p class="notif-message mb-2">
+                {{ notif.message ?? notif.data?.message ?? '' }}
+              </p>
+
+              <!-- Bas : heure + actions -->
+              <div class="d-flex align-center justify-space-between">
+                <span class="notif-time">
+                  <v-icon size="11" class="mr-1">mdi-clock-outline</v-icon>
+                  {{ fmtTime(notif.created_at) }}
+                </span>
+                <div class="d-flex align-center gap-1">
+                  <v-btn
+                    v-if="!notif.read_at"
+                    variant="text"
+                    size="x-small"
+                    color="primary"
+                    :loading="notif._loading"
+                    @click.stop="markRead(notif)"
+                  >
+                    Marquer lu
+                  </v-btn>
+                  <v-btn
+                    variant="text"
+                    size="x-small"
+                    color="error"
+                    icon="mdi-delete-outline"
+                    :loading="notif._deleting"
+                    @click.stop="deleteNotif(notif)"
+                  />
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </v-card>
+
+      </template>
+    </div>
+
+    <!-- ═══ PAGINATION ════════════════════════════════════════════════ -->
+    <div v-if="totalPages > 1" class="d-flex justify-center mt-6">
+      <v-pagination
+        v-model="page"
+        :length="totalPages"
+        :total-visible="5"
+        rounded="lg"
+        color="primary"
+        density="compact"
+      />
+    </div>
+
+    <!-- ═══ DIALOG CONFIRMATION EFFACER TOUT ════════════════════════ -->
+    <v-dialog v-model="confirmClearAll" max-width="360">
+      <v-card rounded="xl" elevation="0">
+        <v-card-text class="pa-6 text-center">
+          <v-icon size="48" color="error" class="mb-3">mdi-delete-sweep-outline</v-icon>
+          <div style="font-size:1rem; font-weight:700; color:#263238;" class="mb-2">
+            Effacer toutes les notifications ?
+          </div>
+          <div style="font-size:0.82rem; color:#90a4ae;">
+            Cette action est irréversible.
           </div>
         </v-card-text>
-
-        <!-- Actions -->
-        <v-divider />
-        <v-card-actions class="pa-4 gap-2">
+        <v-card-actions class="pa-4 pt-0 gap-2">
           <v-btn
-            v-if="selectedNotif.data?.reclamation_id"
-            color="primary"
             variant="tonal"
-            size="small"
-            prepend-icon="mdi-file-document-outline"
             rounded="lg"
-            @click="goToReclamation(selectedNotif.data.reclamation_id)"
+            block
+            @click="confirmClearAll = false"
           >
-            Voir la réclamation
-          </v-btn>
-          <v-spacer />
-          <v-btn
-            v-if="!selectedNotif.is_read"
-            color="success"
-            variant="tonal"
-            size="small"
-            prepend-icon="mdi-check"
-            rounded="lg"
-            @click="markRead(selectedNotif); detailDialog = false"
-          >
-            Marquer lue
+            Annuler
           </v-btn>
           <v-btn
             color="error"
-            variant="text"
-            size="small"
-            prepend-icon="mdi-delete-outline"
-            @click="deleteFromDialog(selectedNotif)"
+            variant="flat"
+            rounded="lg"
+            block
+            :loading="clearingAll"
+            @click="clearAll"
           >
-            Supprimer
+            Effacer
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- ── Snackbar ────────────────────────────────────────────────── -->
-    <v-snackbar
-      v-model="snack.show"
-      :color="snack.color"
-      location="top right"
-      :timeout="3000"
-      rounded="lg"
-    >
-      <v-icon start>
-        {{ snack.color === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle' }}
-      </v-icon>
-      {{ snack.text }}
-      <template #actions>
-        <v-btn icon="mdi-close" variant="text" size="small" @click="snack.show = false" />
-      </template>
-    </v-snackbar>
-
-  </div>
+  </v-container>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, defineComponent, h } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api/axios'
 
 const router = useRouter()
 
-// ════════════════════════════════════════════════════════════════════
-// Composant interne NotifRow
-// ════════════════════════════════════════════════════════════════════
-const NotifRow = defineComponent({
-  name: 'NotifRow',
-  props: { notif: { type: Object, required: true } },
-  emits: ['mark-read', 'delete'],
-  setup(props, { emit }) {
+// ── State ──────────────────────────────────────────────────────────
+const notifications  = ref([])
+const loading        = ref(true)
+const markingAll     = ref(false)
+const clearingAll    = ref(false)
+const confirmClearAll = ref(false)
+const activeTab      = ref('all')
+const page           = ref(1)
+const PER_PAGE       = 15
 
-    function typeColor(type) {
-      const m = {
-        'reclamation.submitted':        '#2563EB',
-        'reclamation.status_changed':   '#D97706',
-        'reclamation.meeting_scheduled':'#7C3AED',
-        'admin.new_reclamation':        '#0891B2',
-        'admin.reclamation_escalated':  '#DC2626',
-        'notes.published':              '#16A34A',
-        'document.ready':               '#0F2D5E',
-        'security.account_locked':      '#DC2626',
-      }
-      // Fallback par mots-clés
-      if (type?.includes('resolved'))  return '#16A34A'
-      if (type?.includes('rejected'))  return '#DC2626'
-      if (type?.includes('escalat'))   return '#EA580C'
-      if (type?.includes('status'))    return '#D97706'
-      if (type?.includes('submitted')) return '#2563EB'
-      return m[type] ?? '#64748B'
-    }
+// ── Tabs ────────────────────────────────────────────────────────────
+const tabs = computed(() => [
+  {
+    value: 'all',
+    label: 'Toutes',
+    count: notifications.value.length,
+  },
+  {
+    value: 'unread',
+    label: 'Non lues',
+    count: notifications.value.filter(n => !n.read_at).length,
+  },
+  {
+    value: 'reclamation',
+    label: 'Réclamations',
+    count: notifications.value.filter(n => n.type?.includes('reclamation')).length,
+  },
+  {
+    value: 'system',
+    label: 'Système',
+    count: notifications.value.filter(n => n.type?.includes('system') || n.type?.includes('general')).length,
+  },
+])
 
-    function typeIcon(type) {
-      if (type?.includes('resolved'))  return 'mdi-check-circle-outline'
-      if (type?.includes('rejected'))  return 'mdi-close-circle-outline'
-      if (type?.includes('escalat'))   return 'mdi-arrow-up-bold-circle-outline'
-      if (type?.includes('status'))    return 'mdi-file-refresh-outline'
-      if (type?.includes('submitted')) return 'mdi-file-plus-outline'
-      if (type?.includes('meeting'))   return 'mdi-calendar-clock'
-      if (type?.includes('notes'))     return 'mdi-school-outline'
-      if (type?.includes('document'))  return 'mdi-file-download-outline'
-      if (type?.includes('lock'))      return 'mdi-lock-alert-outline'
-      return 'mdi-bell-outline'
-    }
+// ── Computed ────────────────────────────────────────────────────────
+const unreadCount = computed(() =>
+  notifications.value.filter(n => !n.read_at).length
+)
 
-    function timeAgo(raw) {
-      if (!raw) return ''
-      const diff = Date.now() - new Date(raw).getTime()
-      const m = Math.floor(diff / 60000)
-      if (m < 1)  return "À l'instant"
-      if (m < 60) return `Il y a ${m} min`
-      const hh = Math.floor(m / 60)
-      if (hh < 24) return `Il y a ${hh}h`
-      const d = Math.floor(hh / 24)
-      if (d < 7)  return `Il y a ${d}j`
-      return new Date(raw).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
-    }
-
-    function truncate(s, len) {
-      if (!s) return ''
-      return s.length > len ? s.slice(0, len) + '…' : s
-    }
-
-    return () => {
-      const n     = props.notif
-      const color = typeColor(n.type)
-      const icon  = typeIcon(n.type)
-
-      return h('div', { class: 'notif-inner' }, [
-        // Point non-lu
-        h('div', { class: 'unread-indicator' }, [
-          !n.is_read ? h('div', { class: 'unread-dot' }) : null
-        ]),
-
-        // Icône
-        h('div', {
-          class: 'notif-icon',
-          style: { background: color + '15', border: `1.5px solid ${color}30` }
-        }, [
-          h('v-icon', { color, size: 19 }, () => icon)
-        ]),
-
-        // Contenu
-        h('div', { class: 'notif-content' }, [
-          h('div', { class: 'notif-row-top' }, [
-            h('span', {
-              class: 'notif-title',
-              style: { fontWeight: n.is_read ? '500' : '700' }
-            }, n.title || 'Notification'),
-            h('span', { class: 'notif-time' }, timeAgo(n.created_at || n.sent_at))
-          ]),
-          h('p', { class: 'notif-body-text' }, truncate(n.body || '', 90)),
-        ]),
-
-        // Boutons
-        h('div', { class: 'notif-btns' }, [
-          !n.is_read ? h('button', {
-            class: 'notif-btn notif-btn--check',
-            title: 'Marquer comme lue',
-            onClick: (e) => { e.stopPropagation(); emit('mark-read', n) }
-          }, [ h('v-icon', { size: 15 }, () => 'mdi-check') ]) : null,
-
-          h('button', {
-            class: 'notif-btn notif-btn--delete',
-            title: 'Supprimer',
-            onClick: (e) => { e.stopPropagation(); emit('delete', n) }
-          }, [ h('v-icon', { size: 15 }, () => 'mdi-delete-outline') ])
-        ])
-      ])
-    }
-  }
-})
-
-// ════════════════════════════════════════════════════════════════════
-// État
-// ════════════════════════════════════════════════════════════════════
-const loading       = ref(true)
-const markingAll    = ref(false)
-const activeFilter  = ref('all')
-const detailDialog  = ref(false)
-const selectedNotif = ref(null)
-const debugInfo     = ref('')
-const list          = ref([])
-const meta          = reactive({
-  total: 0, unread_count: 0, per_page: 15, current_page: 1, last_page: 1
-})
-const snack = reactive({ show: false, text: '', color: 'success' })
-let   refreshTimer = null
-
-const tabs = [
-  { key: 'all',    label: 'Toutes',   icon: 'mdi-bell-outline'       },
-  { key: 'unread', label: 'Non lues', icon: 'mdi-bell-badge-outline'  },
-  { key: 'read',   label: 'Lues',     icon: 'mdi-bell-check-outline'  },
-]
-
-// ── Filtrage ──────────────────────────────────────────────────────────
 const filteredList = computed(() => {
-  if (activeFilter.value === 'unread') return list.value.filter(n => !n.is_read)
-  if (activeFilter.value === 'read')   return list.value.filter(n =>  n.is_read)
-  return list.value
+  if (activeTab.value === 'unread')
+    return notifications.value.filter(n => !n.read_at)
+  if (activeTab.value === 'reclamation')
+    return notifications.value.filter(n => n.type?.includes('reclamation'))
+  if (activeTab.value === 'system')
+    return notifications.value.filter(n =>
+      n.type?.includes('system') || n.type?.includes('general')
+    )
+  return notifications.value
 })
 
-// ── Groupes ───────────────────────────────────────────────────────────
-const groupToday = computed(() => {
-  const s = new Date(); s.setHours(0,0,0,0)
-  return filteredList.value.filter(n => new Date(n.created_at || n.sent_at) >= s)
+const totalPages = computed(() =>
+  Math.ceil(filteredList.value.length / PER_PAGE)
+)
+
+const paginatedList = computed(() => {
+  const s = (page.value - 1) * PER_PAGE
+  return filteredList.value.slice(s, s + PER_PAGE)
 })
-const groupWeek = computed(() => {
-  const end = new Date(); end.setHours(0,0,0,0)
-  const start = new Date(end); start.setDate(start.getDate() - 7)
-  return filteredList.value.filter(n => {
-    const d = new Date(n.created_at || n.sent_at)
-    return d >= start && d < end
+
+// Grouper par date
+const groupedList = computed(() => {
+  const groups = {}
+  paginatedList.value.forEach(n => {
+    const label = dateLabel(n.created_at)
+    if (!groups[label]) groups[label] = []
+    groups[label].push(n)
   })
-})
-const groupOlder = computed(() => {
-  const limit = new Date(); limit.setHours(0,0,0,0); limit.setDate(limit.getDate() - 7)
-  return filteredList.value.filter(n => new Date(n.created_at || n.sent_at) < limit)
+  return Object.entries(groups).map(([date, items]) => ({ date, items }))
 })
 
-// ── Pagination ────────────────────────────────────────────────────────
-const paginationPages = computed(() => {
-  const total = meta.last_page, cur = meta.current_page
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const set = new Set([1, total, cur-1, cur, cur+1].filter(p => p >= 1 && p <= total))
-  const sorted = [...set].sort((a,b) => a-b)
-  const result = []; let prev = 0
-  for (const p of sorted) { if (p - prev > 1) result.push('…'); result.push(p); prev = p }
-  return result
+// ── Lifecycle ───────────────────────────────────────────────────────
+onMounted(async () => {
+  await loadNotifications()
 })
 
-// ── Helpers ───────────────────────────────────────────────────────────
-function typeColor(type) {
-  if (type?.includes('resolved'))  return '#16A34A'
-  if (type?.includes('rejected'))  return '#DC2626'
-  if (type?.includes('escalat'))   return '#EA580C'
-  if (type?.includes('status'))    return '#D97706'
-  if (type?.includes('submitted')) return '#2563EB'
-  if (type?.includes('meeting'))   return '#7C3AED'
-  if (type?.includes('notes'))     return '#16A34A'
-  if (type?.includes('document'))  return '#0F2D5E'
-  return '#64748B'
-}
-function typeIcon(type) {
-  if (type?.includes('resolved'))  return 'mdi-check-circle'
-  if (type?.includes('rejected'))  return 'mdi-close-circle'
-  if (type?.includes('escalat'))   return 'mdi-arrow-up-bold-circle'
-  if (type?.includes('status'))    return 'mdi-bell-ring'
-  if (type?.includes('submitted')) return 'mdi-file-plus'
-  if (type?.includes('meeting'))   return 'mdi-calendar-clock'
-  if (type?.includes('notes'))     return 'mdi-school'
-  if (type?.includes('document'))  return 'mdi-file-download'
-  return 'mdi-bell'
-}
-function typeLabel(type) {
-  if (type?.includes('resolved'))  return 'Réclamation résolue'
-  if (type?.includes('rejected'))  return 'Réclamation rejetée'
-  if (type?.includes('escalat'))   return 'Réclamation escaladée'
-  if (type?.includes('status'))    return 'Mise à jour statut'
-  if (type?.includes('submitted')) return 'Réclamation soumise'
-  if (type?.includes('meeting'))   return 'Réunion programmée'
-  if (type?.includes('notes'))     return 'Notes publiées'
-  if (type?.includes('document'))  return 'Document disponible'
-  if (type?.includes('admin'))     return 'Administration'
-  return 'Notification'
-}
-function statusLabel(s) {
-  const m = { submitted:'Soumise', received:'Reçue', in_review:'En cours',
-              resolved:'Résolue', rejected:'Rejetée', escalated:'Escaladée', cancelled:'Annulée' }
-  return m[s] ?? s
-}
-function statusColor(s) {
-  const m = { submitted:'blue', received:'cyan', in_review:'orange',
-              resolved:'success', rejected:'error', escalated:'deep-orange', cancelled:'grey' }
-  return m[s] ?? 'grey'
-}
-function dataKeyLabel(key) {
-  const m = { reference:'Référence', old_status:'Ancien statut', new_status:'Nouveau statut',
-              module:'Module', semestre:'Semestre', meeting_date:'Date réunion', location:'Lieu', year:'Année' }
-  return m[key] ?? key
-}
-function fDateTime(raw) {
-  if (!raw) return ''
-  return new Date(raw).toLocaleString('fr-FR', {
-    day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'
-  })
-}
-function notify(text, color = 'success') { snack.text = text; snack.color = color; snack.show = true }
-
-// ── API ───────────────────────────────────────────────────────────────
-async function load(page = 1) {
-  loading.value = true; debugInfo.value = ''
+async function loadNotifications() {
+  loading.value = true
   try {
-    const params = { page, per_page: 15 }
-    if (activeFilter.value === 'unread') params.read = '0'
-    if (activeFilter.value === 'read')   params.read = '1'
-    const res  = await api.get('/student/notifications', { params })
-    const body = res.data
-    let items = Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : [])
-    const m   = body?.meta ?? {}
-    list.value        = items
-    meta.total        = m.total        ?? items.length
-    meta.unread_count = m.unread_count ?? items.filter(n => !n.is_read).length
-    meta.per_page     = m.per_page     ?? 15
-    meta.current_page = m.current_page ?? page
-    meta.last_page    = m.last_page    ?? 1
-    if (items.length === 0) {
-      debugInfo.value = `API réponse reçue mais vide.\nURL: /student/notifications\nParams: ${JSON.stringify(params)}\nRaw: ${JSON.stringify(body).substring(0,300)}`
-    }
-  } catch (err) {
-    debugInfo.value = `Erreur API: ${err.response?.data?.message ?? err.message}\nStatus: ${err.response?.status}`
-    notify('Impossible de charger les notifications.', 'error')
+    const res = await api.get('/student/notifications')
+    notifications.value = (res.data?.data ?? res.data ?? []).map(n => ({
+      ...n,
+      _loading:  false,
+      _deleting: false,
+    }))
+  } catch (e) {
+    console.error('[Notifications] Erreur:', e)
   } finally {
     loading.value = false
   }
 }
 
-async function loadPage(p) { await load(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }
-
+// ── Actions ─────────────────────────────────────────────────────────
 async function markRead(notif) {
+  notif._loading = true
   try {
     await api.put(`/student/notifications/${notif.id}/read`)
-    const f = list.value.find(n => n.id === notif.id)
-    if (f) { f.is_read = true; f.read_at = new Date().toISOString() }
-    if (selectedNotif.value?.id === notif.id) {
-      selectedNotif.value.is_read = true
-      selectedNotif.value.read_at = new Date().toISOString()
-    }
-    meta.unread_count = Math.max(0, meta.unread_count - 1)
-  } catch { notify('Erreur lors de la mise à jour.', 'error') }
+    notif.read_at = new Date().toISOString()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    notif._loading = false
+  }
 }
 
 async function markAllRead() {
   markingAll.value = true
   try {
     await api.put('/student/notifications/read-all')
-    list.value.forEach(n => { n.is_read = true; n.read_at = new Date().toISOString() })
-    meta.unread_count = 0
-    notify('Toutes les notifications sont lues.')
-  } catch { notify('Erreur lors de la mise à jour.', 'error') }
-  finally { markingAll.value = false }
+    notifications.value.forEach(n => {
+      if (!n.read_at) n.read_at = new Date().toISOString()
+    })
+  } catch (e) {
+    console.error(e)
+  } finally {
+    markingAll.value = false
+  }
 }
 
 async function deleteNotif(notif) {
+  notif._deleting = true
   try {
     await api.delete(`/student/notifications/${notif.id}`)
-    list.value = list.value.filter(n => n.id !== notif.id)
-    meta.total = Math.max(0, meta.total - 1)
-    if (!notif.is_read) meta.unread_count = Math.max(0, meta.unread_count - 1)
-    notify('Notification supprimée.')
-  } catch { notify('Erreur lors de la suppression.', 'error') }
+    notifications.value = notifications.value.filter(n => n.id !== notif.id)
+  } catch (e) {
+    console.error(e)
+  } finally {
+    notif._deleting = false
+  }
 }
 
-async function deleteFromDialog(notif) {
-  detailDialog.value = false
-  await deleteNotif(notif)
-}
-
-function goToReclamation(id) {
-  detailDialog.value = false
-  router.push({ name: 'student.reclamation.detail', params: { id: String(id) } })
+async function clearAll() {
+  clearingAll.value = true
+  try {
+    await Promise.all(
+      notifications.value.map(n => api.delete(`/student/notifications/${n.id}`))
+    )
+    notifications.value = []
+    confirmClearAll.value = false
+  } catch (e) {
+    console.error(e)
+  } finally {
+    clearingAll.value = false
+  }
 }
 
 function handleClick(notif) {
-  selectedNotif.value = { ...notif }
-  detailDialog.value  = true
-  if (!notif.is_read) markRead(notif)
+  // ── Marquer comme lu ──────────────────────────────────────────────
+  if (!notif.read_at) markRead(notif)
+
+  // ── Extraire les données ──────────────────────────────────────────
+  const data = notif.data ?? {}
+  const type = notif.type ?? ''
+
+  // ── 1. Lien direct si fourni par le backend ───────────────────────
+  if (data.link) {
+    // Lien interne Vue Router
+    if (typeof data.link === 'object') {
+      router.push(data.link)
+      return
+    }
+    // Lien string ex: "/student/reclamations/12"
+    if (typeof data.link === 'string' && data.link.startsWith('/')) {
+      router.push(data.link)
+      return
+    }
+  }
+
+  // ── 2. Navigation selon le type de notification ───────────────────
+
+  // Réclamation (status changé, escaladée, résolue, rejetée, meeting)
+  if (
+    type.includes('reclamation') ||
+    type.includes('status')      ||
+    type.includes('escalat')     ||
+    type.includes('resolved')    ||
+    type.includes('rejected')    ||
+    type.includes('meeting')
+  ) {
+    const reclamationId = data.reclamation_id ?? data.id
+    if (reclamationId) {
+      router.push({
+        name:   'student.reclamation.detail',
+        params: { id: reclamationId },
+      })
+      return
+    }
+    // Fallback : liste des réclamations
+    router.push({ name: 'student.reclamations' })
+    return
+  }
+
+  // Document
+  if (type.includes('document')) {
+    const documentId = data.document_id ?? data.id
+    if (documentId) {
+      router.push({
+        name:   'student.documents',
+        params: { id: documentId },
+      })
+      return
+    }
+    router.push({ name: 'student.dashboard' })
+    return
+  }
+
+  // Note
+  if (type.includes('note')) {
+    router.push({ name: 'student.dashboard' })
+    return
+  }
+
+  // Système / général → dashboard
+  if (type.includes('system') || type.includes('general')) {
+    router.push({ name: 'student.dashboard' })
+    return
+  }
+
+  // ── 3. Fallback → dashboard ───────────────────────────────────────
+  router.push({ name: 'student.dashboard' })
 }
 
-function setFilter(key) { activeFilter.value = key; load(1) }
+// ── Helpers ─────────────────────────────────────────────────────────
+function notifIcon(type) {
+  if (type?.includes('reclamation')) return 'mdi-file-document-outline'
+  if (type?.includes('status'))      return 'mdi-swap-horizontal'
+  if (type?.includes('meeting'))     return 'mdi-calendar-check-outline'
+  if (type?.includes('escalat'))     return 'mdi-arrow-up-circle-outline'
+  if (type?.includes('resolved'))    return 'mdi-check-circle-outline'
+  if (type?.includes('rejected'))    return 'mdi-close-circle-outline'
+  if (type?.includes('document'))    return 'mdi-paperclip'
+  return 'mdi-bell-outline'
+}
 
-onMounted(() => { load(1); refreshTimer = setInterval(() => load(meta.current_page), 60000) })
-onUnmounted(() => { if (refreshTimer) clearInterval(refreshTimer) })
+function notifColor(type) {
+  if (type?.includes('resolved'))    return 'success'
+  if (type?.includes('rejected'))    return 'error'
+  if (type?.includes('escalat'))     return 'deep-orange'
+  if (type?.includes('meeting'))     return 'purple'
+  if (type?.includes('reclamation')) return 'primary'
+  if (type?.includes('document'))    return 'teal'
+  return 'blue-grey'
+}
+
+function notifBg(type) {
+  const map = {
+    success:     'rgba(56,142,60,0.1)',
+    error:       'rgba(211,47,47,0.1)',
+    'deep-orange': 'rgba(230,74,25,0.1)',
+    purple:      'rgba(156,39,176,0.1)',
+    primary:     'rgba(57,73,171,0.1)',
+    teal:        'rgba(0,150,136,0.1)',
+    'blue-grey': 'rgba(96,125,139,0.1)',
+  }
+  return map[notifColor(type)] ?? 'rgba(96,125,139,0.1)'
+}
+
+function notifTypeLabel(type) {
+  if (type?.includes('reclamation')) return 'Réclamation'
+  if (type?.includes('meeting'))     return 'RDV'
+  if (type?.includes('document'))    return 'Document'
+  if (type?.includes('system'))      return 'Système'
+  return 'Info'
+}
+
+function dateLabel(dateStr) {
+  if (!dateStr) return 'Date inconnue'
+  const d    = new Date(dateStr)
+  const now  = new Date()
+  const diff = Math.floor((now - d) / 86400000)
+  if (diff === 0) return "Aujourd'hui"
+  if (diff === 1) return 'Hier'
+  if (diff < 7)   return `Il y a ${diff} jours`
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit', month: 'long', year: 'numeric'
+  }).format(d)
+}
+
+function fmtTime(dateStr) {
+  if (!dateStr) return ''
+  const d    = new Date(dateStr)
+  const now  = new Date()
+  const diff = Math.floor((now - d) / 60000)
+  if (diff < 1)   return 'À l\'instant'
+  if (diff < 60)  return `Il y a ${diff} min`
+  if (diff < 1440) return new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit', minute: '2-digit'
+  }).format(d)
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit', month: 'short'
+  }).format(d)
+}
 </script>
 
 <style scoped>
-/* ════════════════════════════════════════════════════════════════════
-   PAGE
-════════════════════════════════════════════════════════════════════ */
-.notif-page { max-width: 860px; margin: 0 auto; }
-
-/* ── En-tête ── */
-.page-title {
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.title-icon-wrapper {
-  width: 38px; height: 38px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #0F2D5E, #2563EB);
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-.page-subtitle { font-size: 0.85rem; color: #6B7280; margin: 4px 0 0; }
-
-:deep(.v-theme--dark) .page-title   { color: #F1F5F9; }
-:deep(.v-theme--dark) .page-subtitle{ color: #94A3B8; }
-
-/* ════════════════════════════════════════════════════════════════════
-   FILTRES
-════════════════════════════════════════════════════════════════════ */
-.filter-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
-
-.filter-tab {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 7px 16px; border-radius: 24px;
-  border: 1.5px solid #E5E7EB;
-  background: #fff;
-  font-size: 13px; font-weight: 500; color: #6B7280;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.filter-tab:hover {
-  border-color: #0F2D5E;
-  color: #0F2D5E;
-  background: #EFF6FF;
-}
-.filter-tab--active {
-  background: #0F2D5E;
-  border-color: #0F2D5E;
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(15,45,94,0.25);
-}
-
-.tab-badge {
-  background: rgba(0,0,0,0.08);
-  border-radius: 12px;
-  font-size: 11px; font-weight: 700;
-  padding: 1px 7px; min-width: 20px;
-  text-align: center;
-}
-.filter-tab--active .tab-badge { background: rgba(255,255,255,0.25); }
-
-:deep(.v-theme--dark) .filter-tab {
-  background: #1E293B; border-color: #334155; color: #94A3B8;
-}
-:deep(.v-theme--dark) .filter-tab:hover {
-  background: #1D3461; border-color: #3B82F6; color: #93C5FD;
-}
-:deep(.v-theme--dark) .filter-tab--active {
-  background: #1D4ED8; border-color: #1D4ED8; color: #fff;
-}
-
-/* ════════════════════════════════════════════════════════════════════
-   ÉTATS
-════════════════════════════════════════════════════════════════════ */
-.state-box {
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center; padding: 60px 20px;
-  background: #fff; border: 1px solid #E5E7EB;
-  border-radius: 16px; text-align: center;
-}
-:deep(.v-theme--dark) .state-box {
-  background: #1E293B; border-color: #334155;
-}
-
-.empty-icon {
-  width: 72px; height: 72px; border-radius: 50%;
-  background: #F3F4F6;
-  display: flex; align-items: center; justify-content: center;
-}
-:deep(.v-theme--dark) .empty-icon { background: #334155; }
-
-.empty-title { font-size: 1rem; font-weight: 600; color: #374151; margin: 0; }
-.state-text  { font-size: 0.85rem; color: #9CA3AF; margin: 4px 0 0; }
-:deep(.v-theme--dark) .empty-title { color: #E2E8F0; }
-
-/* ════════════════════════════════════════════════════════════════════
-   GROUPES
-════════════════════════════════════════════════════════════════════ */
-.group-label {
-  display: inline-flex; align-items: center;
-  font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.07em;
-  color: #9CA3AF;
-  margin-bottom: 8px; padding: 0 2px;
-}
-:deep(.v-theme--dark) .group-label { color: #64748B; }
-
-/* ════════════════════════════════════════════════════════════════════
-   CARTE NOTIFICATION
-════════════════════════════════════════════════════════════════════ */
+/* Carte notification */
 .notif-card {
-  background: #fff;
-  border: 1.5px solid #E5E7EB;
-  border-radius: 12px;
-  margin-bottom: 8px;
   cursor: pointer;
-  overflow: hidden;
-  transition: all 0.18s ease;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 .notif-card:hover {
-  border-color: #BFDBFE;
-  box-shadow: 0 4px 16px rgba(37,99,235,0.08);
+  box-shadow: 0 4px 18px rgba(26,35,126,0.09) !important;
   transform: translateY(-1px);
 }
+
+/* Non lue : fond légèrement bleuté + bordure gauche */
 .notif-card--unread {
-  border-left: 3px solid #2563EB;
-  background: #F8FAFF;
+  background: #f0f4ff !important;
+  border-left: 3px solid #3949ab !important;
 }
 
-:deep(.v-theme--dark) .notif-card {
-  background: #1E293B;
-  border-color: #334155;
-}
-:deep(.v-theme--dark) .notif-card:hover {
-  border-color: #3B82F6;
-  box-shadow: 0 4px 16px rgba(59,130,246,0.12);
-}
-:deep(.v-theme--dark) .notif-card--unread {
-  background: #172036;
-  border-left-color: #3B82F6;
-}
-
-/* ── Ligne intérieure ── */
-.notif-inner {
-  display: flex; align-items: flex-start;
-  gap: 12px; padding: 14px 16px;
-}
-
-.unread-indicator { width: 10px; flex-shrink: 0; padding-top: 4px; }
-.unread-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #2563EB;
-}
-
+/* Icône */
 .notif-icon {
-  width: 38px; height: 38px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-.notif-content { flex: 1; min-width: 0; }
-
-.notif-row-top {
-  display: flex; align-items: flex-start;
-  justify-content: space-between; gap: 8px;
-  margin-bottom: 4px;
-}
-
+/* Titre */
 .notif-title {
-  font-size: 13.5px; color: #111827;
-  overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; flex: 1;
-}
-:deep(.v-theme--dark) .notif-title { color: #E2E8F0; }
-
-.notif-time {
-  font-size: 11px; color: #9CA3AF;
-  white-space: nowrap; flex-shrink: 0;
-}
-
-.notif-body-text {
-  font-size: 12.5px; color: #6B7280;
-  margin: 0; line-height: 1.5;
-  overflow: hidden; text-overflow: ellipsis;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #263238;
   white-space: nowrap;
-}
-:deep(.v-theme--dark) .notif-body-text { color: #94A3B8; }
-
-/* ── Boutons actions ── */
-.notif-btns {
-  display: flex; flex-direction: column;
-  gap: 4px; flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
 }
 
-.notif-btn {
-  width: 28px; height: 28px; border-radius: 7px;
-  display: flex; align-items: center; justify-content: center;
-  border: none; cursor: pointer;
-  transition: all 0.15s ease;
-}
-.notif-btn--check {
-  background: #ECFDF5; color: #16A34A;
-}
-.notif-btn--check:hover { background: #D1FAE5; }
-
-.notif-btn--delete {
-  background: #FEF2F2; color: #DC2626;
-}
-.notif-btn--delete:hover { background: #FEE2E2; }
-
-:deep(.v-theme--dark) .notif-btn--check  { background: rgba(22,163,74,0.15);  color: #86EFAC; }
-:deep(.v-theme--dark) .notif-btn--delete { background: rgba(220,38,38,0.15);  color: #FCA5A5; }
-
-/* ════════════════════════════════════════════════════════════════════
-   PAGINATION
-════════════════════════════════════════════════════════════════════ */
-.pagination {
-  display: flex; align-items: center;
-  justify-content: center; gap: 5px;
-  flex-wrap: wrap;
+/* Message */
+.notif-message {
+  font-size: 0.8rem;
+  color: #78909c;
+  line-height: 1.5;
+  margin: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
-.page-arrow {
-  width: 34px; height: 34px; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  border: 1.5px solid #E5E7EB; background: #fff;
-  color: #6B7280; cursor: pointer;
-  transition: all 0.15s;
-}
-.page-arrow:hover:not(:disabled) { border-color: #0F2D5E; color: #0F2D5E; }
-.page-arrow:disabled { opacity: 0.4; cursor: default; }
-
-.page-btn {
-  min-width: 34px; height: 34px; padding: 0 8px;
-  border-radius: 8px;
-  display: inline-flex; align-items: center; justify-content: center;
-  border: 1.5px solid #E5E7EB; background: #fff;
-  font-size: 13px; font-weight: 500; color: #374151;
-  cursor: pointer; transition: all 0.15s;
-}
-.page-btn:hover:not(.page-btn--ellipsis):not(.page-btn--active) {
-  border-color: #0F2D5E; color: #0F2D5E;
-}
-.page-btn--active {
-  background: #0F2D5E; border-color: #0F2D5E;
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(15,45,94,0.25);
-}
-.page-btn--ellipsis { border: none; cursor: default; color: #9CA3AF; background: transparent; }
-
-:deep(.v-theme--dark) .page-arrow,
-:deep(.v-theme--dark) .page-btn {
-  background: #1E293B; border-color: #334155; color: #94A3B8;
-}
-:deep(.v-theme--dark) .page-btn--active {
-  background: #1D4ED8; border-color: #1D4ED8; color: #fff;
+/* Heure */
+.notif-time {
+  font-size: 0.72rem;
+  color: #b0bec5;
+  display: inline-flex;
+  align-items: center;
 }
 
-/* ════════════════════════════════════════════════════════════════════
-   DIALOG DÉTAIL
-════════════════════════════════════════════════════════════════════ */
-.detail-card { overflow: hidden; }
-
-.detail-banner {
-  display: flex; align-items: flex-start;
-  gap: 14px; padding: 22px;
-  position: relative;
-}
-.detail-banner-icon {
-  width: 52px; height: 52px; border-radius: 14px;
-  background: rgba(255,255,255,0.2);
-  display: flex; align-items: center; justify-content: center;
+/* Point non lu */
+.unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3949ab;
   flex-shrink: 0;
 }
-.detail-banner-text { flex: 1; }
-.detail-type-label {
-  font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: rgba(255,255,255,0.7); margin-bottom: 4px;
-}
-.detail-title {
-  font-size: 1rem; font-weight: 700; color: #fff; line-height: 1.3;
-}
-.detail-date {
-  font-size: 11.5px; color: rgba(255,255,255,0.7);
-  margin-top: 5px; display: flex; align-items: center;
-}
-.detail-close { position: absolute; top: 14px; right: 14px; }
 
-.detail-body { background: #fff; }
-:deep(.v-theme--dark) .detail-body { background: #1E293B; }
-
-.detail-message-box {
-  display: flex; align-items: flex-start; gap: 8px;
-  background: #F9FAFB; border: 1px solid #E5E7EB;
-  border-radius: 12px; padding: 14px 16px;
-}
-:deep(.v-theme--dark) .detail-message-box {
-  background: #162032; border-color: #334155;
+/* Label date groupe */
+.date-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #90a4ae;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 8px 4px 4px;
 }
 
-.detail-message {
-  font-size: 0.95rem; color: #374151;
-  line-height: 1.7; margin: 0; white-space: pre-line;
-}
-:deep(.v-theme--dark) .detail-message { color: #CBD5E1; }
-
-.detail-meta {
-  background: #F9FAFB; border: 1px solid #E5E7EB;
-  border-radius: 12px; padding: 14px 16px;
-}
-:deep(.v-theme--dark) .detail-meta { background: #162032; border-color: #334155; }
-
-.detail-meta-title {
-  font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.07em;
-  color: #9CA3AF; margin: 0 0 10px;
-  display: flex; align-items: center;
-}
-.detail-meta-grid { display: flex; flex-direction: column; gap: 8px; }
-
-.meta-row {
-  display: flex; align-items: center;
-  justify-content: space-between;
-  padding-bottom: 7px;
-  border-bottom: 1px solid #F3F4F6;
-}
-.meta-row:last-child { border-bottom: none; padding-bottom: 0; }
-:deep(.v-theme--dark) .meta-row { border-color: #1E293B; }
-
-.meta-key { font-size: 12px; color: #9CA3AF; font-weight: 500; }
-.meta-val { font-size: 13px; color: #111827; font-weight: 600; }
-:deep(.v-theme--dark) .meta-val { color: #E2E8F0; }
-
-.detail-read-status {
-  display: flex; align-items: center;
-  font-size: 12px; color: #9CA3AF;
-}
-
-/* ════════════════════════════════════════════════════════════════════
-   RESPONSIVE
-════════════════════════════════════════════════════════════════════ */
 @media (max-width: 600px) {
-  .notif-page { padding: 0; }
-  .page-title { font-size: 1.2rem; }
-  .filter-tab { padding: 6px 12px; font-size: 12px; }
-  .notif-inner { padding: 12px; }
-  .notif-title { font-size: 13px; }
+  .notif-title   { max-width: 160px; font-size: 0.82rem; }
+  .notif-message { -webkit-line-clamp: 1; }
 }
 </style>

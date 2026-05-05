@@ -319,31 +319,35 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // ── 2. Vérifier le mot de passe ───────────────────────────────
-        if (! Hash::check($request->input('password'), $user->password)) {
-            if (isset($user->failed_login_count)) {
-                $user->increment('failed_login_count');
-                if ($user->failed_login_count >= 5) {
-                    $user->update(['locked_until' => now()->addMinutes(15)]);
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Compte bloqué 15 min suite à trop de tentatives échouées.',
-                    ], 423);
-                }
-            }
-            return response()->json([
-                'success' => false,
-                'message' => 'Identifiants incorrects.',
-            ], 401);
-        }
-
-        // ── 3. Vérifier le verrouillage ───────────────────────────────
+        // ── 2. Vérifier le verrouillage avant le mot de passe ─────────
         if (! empty($user->locked_until) && now()->lt($user->locked_until)) {
-            $minutes = now()->diffInMinutes($user->locked_until);
+            $minutes = (int) now()->diffInMinutes($user->locked_until);
             return response()->json([
                 'success' => false,
                 'message' => "Compte bloqué. Réessayez dans {$minutes} minute(s).",
             ], 423);
+        }
+
+        // ── 3. Vérifier le mot de passe ───────────────────────────────
+        if (! Hash::check($request->input('password'), $user->password)) {
+            $failCount = ($user->failed_login_count ?? 0) + 1;
+            $updateFail = ['failed_login_count' => $failCount];
+
+            if ($failCount >= 5) {
+                $updateFail['locked_until'] = now()->addMinutes(15);
+                $user->update($updateFail);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Compte bloqué 15 min suite à trop de tentatives échouées.',
+                ], 423);
+            }
+
+            $user->update($updateFail);
+            $remaining = 5 - $failCount;
+            return response()->json([
+                'success' => false,
+                'message' => "Identifiants incorrects. {$remaining} tentative(s) restante(s).",
+            ], 401);
         }
 
         // ── 4. Vérifier si le compte est actif ────────────────────────
@@ -355,7 +359,10 @@ class AuthController extends Controller
         }
 
         // ── 5. Réinitialiser les tentatives échouées ──────────────────
-        $updateData = ['failed_login_count' => 0, 'locked_until' => null];
+        $updateData = [
+            'failed_login_count' => 0,
+            'locked_until'       => null,
+        ];
 
         // ── 6. Vérifier si l'appareil est reconnu ────────────────────
         $isTrusted = false;
@@ -378,16 +385,14 @@ class AuthController extends Controller
 
         // ── 7. Si appareil non reconnu → envoyer OTP ─────────────────
         if (! $isTrusted) {
-            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $code   = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $sendTo = $user->notification_email ?? $user->email;
+            $deviceInfo = $this->parseUserAgent($userAgent);
 
             DB::table('password_reset_tokens')->updateOrInsert(
                 ['email' => $user->email],
                 ['token' => Hash::make($code), 'created_at' => now()]
             );
-
-            // ✅ Adresse de réception : notification_email en priorité
-            $sendTo     = $user->notification_email ?? $user->email;
-            $deviceInfo = $this->parseUserAgent($userAgent);
 
             try {
                 Mail::raw(
@@ -413,7 +418,6 @@ class AuthController extends Controller
                     'error'   => $e->getMessage(),
                     'send_to' => $sendTo,
                 ]);
-                // On continue pour ne pas bloquer la connexion
             }
 
             return response()->json([
@@ -584,7 +588,7 @@ class AuthController extends Controller
             ->first();
 
         if ($existing && now()->diffInSeconds($existing->created_at) < 60) {
-            $wait = 60 - now()->diffInSeconds($existing->created_at);
+            $wait = 60 - (int) now()->diffInSeconds($existing->created_at);
             return response()->json([
                 'success' => false,
                 'message' => "Attendez {$wait} seconde(s) avant de renvoyer.",
@@ -593,7 +597,7 @@ class AuthController extends Controller
 
         // ── Générer et envoyer un nouveau code ────────────────────────
         $code   = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $sendTo = $user->notification_email ?? $user->email; // ✅ Gmail en priorité
+        $sendTo = $user->notification_email ?? $user->email;
 
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
@@ -718,7 +722,7 @@ class AuthController extends Controller
         }
 
         $code   = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $sendTo = $user->notification_email ?? $user->email; // ✅ Gmail en priorité
+        $sendTo = $user->notification_email ?? $user->email;
 
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
@@ -760,20 +764,20 @@ class AuthController extends Controller
 
         $email = strtolower(trim($request->email));
 
-        // Chercher un User directement (admin ou étudiant)
+        // ── 1. Chercher via email principal (admin ou étudiant) ───────
         $user = User::whereRaw('LOWER(email) = ?', [$email])
             ->where('is_active', true)
             ->first();
 
+        // ── 2. Chercher via notification_email ────────────────────────
         if (! $user) {
-            // Chercher aussi via notification_email
             $user = User::whereRaw('LOWER(notification_email) = ?', [$email])
                 ->where('is_active', true)
                 ->first();
         }
 
+        // ── 3. Chercher via la table students ─────────────────────────
         if (! $user) {
-            // Chercher via la table students
             $student = Student::whereRaw('LOWER(email) = ?', [$email])
                 ->whereNotNull('user_id')
                 ->first();
@@ -782,15 +786,18 @@ class AuthController extends Controller
             }
         }
 
+        // ── 4. Email introuvable → message personnalisé ───────────────
         if (! $user) {
             return response()->json([
-                'success' => false,
-                'message' => 'Aucun compte trouvé avec cet email.',
+                'success'    => false,
+                'message'    => 'Aucun étudiant trouvé avec ce email. Contactez l\'administration.',
+                'error_code' => 'EMAIL_NOT_FOUND',
             ], 404);
         }
 
+        // ── 5. Générer et envoyer l'OTP ───────────────────────────────
         $code   = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $sendTo = $user->notification_email ?? $user->email; // ✅ Gmail en priorité
+        $sendTo = $user->notification_email ?? $user->email;
 
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
@@ -874,7 +881,7 @@ class AuthController extends Controller
             ], 422);
         }
 
-        // Générer un reset_token temporaire (valable 15 min)
+        // ── Générer un reset_token temporaire (valable 15 min) ────────
         $resetToken = Str::random(64);
         DB::table('password_reset_tokens')->where('email', $user->email)->update([
             'token'      => Hash::make($resetToken),
@@ -905,7 +912,7 @@ class AuthController extends Controller
         $record     = null;
         $targetUser = null;
 
-        // Parcourir les tokens pour trouver le bon
+        // ── Parcourir les tokens pour trouver le bon ──────────────────
         $allTokens = DB::table('password_reset_tokens')->get();
         foreach ($allTokens as $row) {
             if (Hash::check($request->reset_token, $row->token)) {
@@ -930,13 +937,13 @@ class AuthController extends Controller
             ], 422);
         }
 
-        // Mettre à jour le mot de passe
+        // ── Mettre à jour le mot de passe ─────────────────────────────
         $targetUser->update(['password' => Hash::make($request->password)]);
 
-        // Révoquer tous les tokens Sanctum
+        // ── Révoquer tous les tokens Sanctum ──────────────────────────
         $targetUser->tokens()->delete();
 
-        // Supprimer le reset token
+        // ── Supprimer le reset token ──────────────────────────────────
         DB::table('password_reset_tokens')->where('email', $record->email)->delete();
 
         Log::info('[resetPassword] Mot de passe réinitialisé', [
@@ -988,7 +995,7 @@ class AuthController extends Controller
         return array_filter([
             'id'                 => $user->id,
             'email'              => $user->email,
-            'notification_email' => $user->notification_email ?? null, // ✅ exposé
+            'notification_email' => $user->notification_email ?? null,
             'login_identifier'   => $user->login_identifier,
             'role'               => $user->role,
             'is_active'          => $user->is_active ?? true,
@@ -1016,10 +1023,10 @@ class AuthController extends Controller
     private function parseUserAgent(string $ua): string
     {
         if (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) return 'iOS';
-        if (str_contains($ua, 'Android'))  return 'Android';
-        if (str_contains($ua, 'Windows'))  return 'Windows';
+        if (str_contains($ua, 'Android'))   return 'Android';
+        if (str_contains($ua, 'Windows'))   return 'Windows';
         if (str_contains($ua, 'Macintosh')) return 'macOS';
-        if (str_contains($ua, 'Linux'))    return 'Linux';
+        if (str_contains($ua, 'Linux'))     return 'Linux';
         return 'Navigateur inconnu';
     }
 }

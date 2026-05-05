@@ -8,7 +8,7 @@
           <div class="text-center mb-6">
             <div class="logo-circle mx-auto mb-3">
               <img
-                src="https://www.genspark.ai/api/files/s/UImvfoE3"
+                src="https://th.bing.com/th/id/R.bb2cf5d4b7c5c26926598d033caa12d5?rik=qVW4UwQbTi2FBw&riu=http%3a%2f%2fiscae.mr%2fsites%2fdefault%2ffiles%2flogo-iscae.png&ehk=YA1xYsCRE3ywccmaupnq14KGVjvhrs1pJQdhphtJE%2bs%3d&risl=&pid=ImgRaw&r=0"
                 alt="ISCAE"
                 class="logo-img"
               />
@@ -430,7 +430,7 @@ async function handleSetPassword() {
 
     // ✅ Marquer comme initialisé pour éviter double init
     authStore.initialized = true
-
+  
     console.log('[Register] isAuthenticated =', authStore.isAuthenticated)
     console.log('[Register] role =', authStore.user?.role)
 

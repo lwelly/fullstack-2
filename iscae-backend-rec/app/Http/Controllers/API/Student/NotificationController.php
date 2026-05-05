@@ -17,19 +17,21 @@ class NotificationController extends Controller
         // ── Identifier l'utilisateur ─────────────────────────────────
         $userId = Auth::id();
 
-        // ── RÉPONSE DEBUG : retirer après confirmation ────────────────
-        // Décommentez les 10 lignes suivantes pour voir le problème exact
-        /*
-        return response()->json([
-            'debug'        => true,
-            'auth_id'      => $userId,
-            'auth_user'    => Auth::user()?->only(['id', 'email', 'role']),
-            'bearer_token' => substr($request->bearerToken() ?? '', 0, 15) . '...',
-            'notif_total'  => DB::table('notifications')->count(),
-            'notif_user3'  => DB::table('notifications')->where('user_id', 3)->count(),
-            'notif_authid' => $userId ? DB::table('notifications')->where('user_id', $userId)->count() : 'N/A',
+         $user          = $request->user();
+    $notifications = \App\Models\Notification::where('user_id', $user->id)
+        ->orderByDesc('created_at')
+        ->get()
+        ->map(fn($n) => [
+            'id'         => $n->id,
+            'title'      => $n->title,
+            'message'    => $n->message,
+            'type'       => $n->type,
+            'data'       => is_string($n->data) ? json_decode($n->data, true) : ($n->data ?? []),
+            'read_at'    => $n->read_at,
+            'created_at' => $n->created_at,
         ]);
-        */
+
+    return response()->json(['success' => true, 'data' => $notifications]);
 
         if (! $userId) {
             return response()->json([
