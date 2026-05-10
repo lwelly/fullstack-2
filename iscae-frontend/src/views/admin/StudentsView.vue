@@ -9,15 +9,7 @@
           {{ meta.total }} étudiant(s) enregistré(s)
         </p>
       </div>
-      <v-btn
-        variant="tonal"
-        color="primary"
-        prepend-icon="mdi-refresh"
-        :loading="loading"
-        @click="load"
-      >
-        Actualiser
-      </v-btn>
+      
     </div>
 
     <!-- ── Filtres ───────────────────────────────────────────── -->

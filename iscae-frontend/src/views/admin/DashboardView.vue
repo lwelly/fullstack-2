@@ -9,15 +9,7 @@
           {{ todayFr() }} — Vue d'ensemble des réclamations
         </p>
       </div>
-      <v-btn
-        variant="tonal"
-        color="primary"
-        prepend-icon="mdi-refresh"
-        :loading="loading"
-        @click="load"
-      >
-        Actualiser
-      </v-btn>
+      
     </div>
 
     <!-- ── KPI Cards ─────────────────────────────────────────── -->

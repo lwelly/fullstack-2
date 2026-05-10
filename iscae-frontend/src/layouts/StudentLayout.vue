@@ -7,22 +7,21 @@
     <v-navigation-drawer
       v-model="drawer"
       permanent
-      width="230"
+      width="240"
       :class="['sidebar', { 'sidebar--dark': isDark }]"
     >
       <!-- ── Logo ─────────────────────────────────────────────────── -->
-      <div class="sidebar-logo px-4 py-4">
-        <div class="d-flex align-center gap-3">
-         <div class="logo-wrapper">
-  <img
-    src="https://th.bing.com/th/id/R.bb2cf5d4b7c5c26926598d033caa12d5?rik=qVW4UwQbTi2FBw&riu=http%3a%2f%2fiscae.mr%2fsites%2fdefault%2ffiles%2flogo-iscae.png&ehk=YA1xYsCRE3ywccmaupnq14KGVjvhrs1pJQdhphtJE%2bs%3d&risl=&pid=ImgRaw&r=0"
-    alt="Logo ISCAE"
-    class="logo-img"
-    draggable="false"
-  />
-</div>
-
-          <div>
+      <div class="sidebar-logo px-5 py-5">
+        <div class="d-flex align-center" style="gap: 14px;">
+          <div class="logo-wrapper">
+            <img
+              src="https://th.bing.com/th/id/R.bb2cf5d4b7c5c26926598d033caa12d5?rik=qVW4UwQbTi2FBw&riu=http%3a%2f%2fiscae.mr%2fsites%2fdefault%2ffiles%2flogo-iscae.png&ehk=YA1xYsCRE3ywccmaupnq14KGVjvhrs1pJQdhphtJE%2bs%3d&risl=&pid=ImgRaw&r=0"
+              alt="Logo ISCAE"
+              class="logo-img"
+              draggable="false"
+            />
+          </div>
+          <div class="logo-text">
             <div class="logo-title">ISCAE</div>
             <div class="logo-sub">ÉTUDIANT</div>
           </div>
@@ -31,10 +30,11 @@
 
       <div class="sidebar-divider" />
 
-      <!-- ── Navigation ───────────────────────────────────────────── -->
-      <div class="px-3 py-2">
+      <!-- ── Section PRINCIPAL ─────────────────────────────────────── -->
+      <div class="px-3 pt-4 pb-1">
+        <div class="nav-section-label">PRINCIPAL</div>
         <router-link
-          v-for="item in navItems"
+          v-for="item in mainNavItems"
           :key="item.name"
           :to="item.to"
           class="nav-link"
@@ -50,15 +50,40 @@
         </router-link>
       </div>
 
+      <div class="sidebar-divider mt-2" />
+
+      <!-- ── Section COMPTE ────────────────────────────────────────── -->
+      <div class="px-3 pt-3 pb-1">
+        <div class="nav-section-label">COMPTE</div>
+        <router-link
+          v-for="item in accountNavItems"
+          :key="item.name"
+          :to="item.to"
+          class="nav-link"
+          :class="{ active: isActive(item) }"
+        >
+          <div class="nav-icon-wrapper">
+            <v-icon size="18">{{ item.icon }}</v-icon>
+          </div>
+          <span class="nav-label">{{ item.title }}</span>
+        </router-link>
+      </div>
+
       <!-- ── Footer utilisateur ───────────────────────────────────── -->
       <template #append>
         <div class="sidebar-divider" />
-        <div class="sidebar-footer px-3 py-3">
-          <div class="d-flex align-center gap-2">
-            <v-avatar size="32" class="user-avatar">
-              <span class="avatar-initials">{{ initials }}</span>
+        <div class="sidebar-footer px-4 py-3">
+          <div class="d-flex align-center" style="gap: 10px;">
+            <v-avatar size="34" class="user-avatar flex-shrink-0">
+              <img
+                v-if="user?.photo_url"
+                :src="user.photo_url"
+                :alt="user.name"
+                style="width:100%;height:100%;object-fit:cover;border-radius:50%"
+              />
+              <span v-else class="avatar-initials">{{ initials }}</span>
             </v-avatar>
-            <div class="flex-1 min-width-0">
+            <div style="flex:1; min-width:0;">
               <div class="user-name text-truncate">{{ user?.name ?? 'Étudiant' }}</div>
               <div class="user-role">Étudiant</div>
             </div>
@@ -82,17 +107,15 @@
     ══════════════════════════════════════════════════════════════════ -->
     <v-app-bar
       flat
-      height="58"
+      height="60"
       :class="['app-header', { 'app-header--dark': isDark }]"
     >
-      <!-- Bouton menu mobile -->
       <v-app-bar-nav-icon
         class="d-md-none"
         :color="isDark ? 'white' : '#374151'"
         @click="drawer = !drawer"
       />
 
-      <!-- Titre page -->
       <v-app-bar-title>
         <span :class="['page-title', { 'page-title--dark': isDark }]">
           {{ pageTitle }}
@@ -105,7 +128,7 @@
           icon
           variant="text"
           size="small"
-          class="mr-1 theme-btn"
+          class="mr-1"
           :title="isDark ? 'Mode clair' : 'Mode sombre'"
           @click="toggleThemeGlobal"
         >
@@ -119,7 +142,7 @@
           icon
           variant="text"
           size="small"
-          class="mr-1 notif-btn"
+          class="mr-1"
           :to="{ name: 'student.notifications' }"
         >
           <v-badge
@@ -136,14 +159,27 @@
           </v-icon>
         </v-btn>
 
+        <!-- Email -->
+        <div
+          v-if="user?.email"
+          :class="['header-email mr-2', { 'header-email--dark': isDark }]"
+        >
+          {{ user.email }}
+        </div>
+
         <!-- Avatar -->
         <v-avatar
-          size="34"
+          size="36"
           class="mr-3 header-avatar"
-          style="cursor: pointer"
+          style="cursor:pointer"
           @click="router.push({ name: 'student.profile' })"
         >
-          <span class="avatar-initials-header">{{ initials }}</span>
+          <img
+            v-if="user?.photo_url"
+            :src="user.photo_url"
+            style="width:100%;height:100%;object-fit:cover;border-radius:50%"
+          />
+          <span v-else class="avatar-initials-header">{{ initials }}</span>
         </v-avatar>
       </template>
     </v-app-bar>
@@ -172,17 +208,14 @@ const router    = useRouter()
 const authStore = useAuthStore()
 const toast     = useToast()
 
-// ── Thème injecté depuis App.vue ──────────────────────────────────────
 const isDark            = inject('isDark')
 const toggleThemeGlobal = inject('toggleTheme')
 const appTheme          = inject('appTheme')
 
-// ── État ──────────────────────────────────────────────────────────────
-const drawer = ref(true)
-const unread = ref(0)
+const drawer     = ref(true)
+const unread     = ref(0)
 let   notifTimer = null
 
-// ── User ──────────────────────────────────────────────────────────────
 const user = computed(() => authStore.user)
 
 const initials = computed(() => {
@@ -196,171 +229,166 @@ const initials = computed(() => {
 })
 
 // ── Navigation ────────────────────────────────────────────────────────
-const navItems = [
+const mainNavItems = [
   {
-    title: 'Tableau de bord',
-    icon:  'mdi-view-dashboard-outline',
-    name:  'student.dashboard',
-    to:    { name: 'student.dashboard' },
+    title : 'Tableau de bord',
+    icon  : 'mdi-view-dashboard-outline',
+    name  : 'student.dashboard',
+    to    : { name: 'student.dashboard' },
   },
   {
-    title: 'Mes Réclamations',
-    icon:  'mdi-message-alert-outline',
-    name:  'student.reclamations',
-    to:    { name: 'student.reclamations' },
+    title : 'Mes Réclamations',
+    icon  : 'mdi-message-alert-outline',
+    name  : 'student.reclamations',
+    to    : { name: 'student.reclamations' },
   },
   {
-    title: 'Nouvelle Réclamation',
-    icon:  'mdi-plus-circle-outline',
-    name:  'student.reclamations.new',
-    to:    { name: 'student.reclamations.new' },
+    title : 'Nouvelle Réclamation',
+    icon  : 'mdi-plus-circle-outline',
+    name  : 'student.reclamations.new',
+    to    : { name: 'student.reclamations.new' },
   },
   {
-    title: 'Notifications',
-    icon:  'mdi-bell-outline',
-    name:  'student.notifications',
-    to:    { name: 'student.notifications' },
-    badge: true,
-  },
-  {
-    title: 'Mon Profil',
-    icon:  'mdi-account-outline',
-    name:  'student.profile',
-    to:    { name: 'student.profile' },
+    title : 'Notifications',
+    icon  : 'mdi-bell-outline',
+    name  : 'student.notifications',
+    to    : { name: 'student.notifications' },
+    badge : true,
   },
 ]
 
-// ── Titre de page ─────────────────────────────────────────────────────
+const accountNavItems = [
+  {
+    title : 'Mon Profil',
+    icon  : 'mdi-account-circle-outline',
+    name  : 'student.profile',
+    to    : { name: 'student.profile' },
+  },
+]
+
 const titleMap = {
-  'student.dashboard':          'Tableau de bord',
-  'student.reclamations':       'Mes Réclamations',
-  'student.reclamations.new':   'Nouvelle Réclamation',
-  'student.reclamation.detail': 'Détail Réclamation',
-  'student.notifications':      'Notifications',
-  'student.profile':            'Mon Profil',
+  'student.dashboard'          : 'Tableau de bord',
+  'student.reclamations'       : 'Mes Réclamations',
+  'student.reclamations.new'   : 'Nouvelle Réclamation',
+  'student.reclamation.detail' : 'Détail Réclamation',
+  'student.notifications'      : 'Notifications',
+  'student.profile'            : 'Mon Profil',
 }
 const pageTitle = computed(() => titleMap[route.name] ?? 'Espace Étudiant')
 
-// ── Route active (inclut les sous-routes) ─────────────────────────────
 function isActive(item) {
   if (route.name === item.name) return true
-  // Marquer "Mes Réclamations" actif aussi sur la page détail
   if (item.name === 'student.reclamations' &&
       route.name === 'student.reclamation.detail') return true
   return false
 }
 
-// ── Logout ────────────────────────────────────────────────────────────
 async function logout() {
-  try {
-    await authStore.logout()
-    toast.success('Déconnexion réussie.')
-  } catch {
-    // ignore
-  } finally {
-    router.push({ name: 'login' })
-  }
+  try   { await authStore.logout(); toast.success('Déconnexion réussie.') }
+  catch { /* ignore */ }
+  finally { router.push({ name: 'login' }) }
 }
 
-// ── Notifications non lues ────────────────────────────────────────────
 async function fetchUnread() {
-  try {
-    const res = await api.get('/student/notifications/counts')
-    unread.value = res.data?.data?.unread ?? 0
-  } catch {
-    unread.value = 0
-  }
+  try   { const res = await api.get('/student/notifications/counts'); unread.value = res.data?.data?.unread ?? 0 }
+  catch { unread.value = 0 }
 }
 
-// ── Lifecycle ─────────────────────────────────────────────────────────
-onMounted(() => {
-  fetchUnread()
-  notifTimer = setInterval(fetchUnread, 60000)
-})
-
-onUnmounted(() => {
-  if (notifTimer) clearInterval(notifTimer)
-})
+onMounted(() => { fetchUnread(); notifTimer = setInterval(fetchUnread, 60_000) })
+onUnmounted(() => { if (notifTimer) clearInterval(notifTimer) })
 </script>
 
 <style scoped>
 /* ════════════════════════════════════════════════════════════════════
-   SIDEBAR — MODE CLAIR
+   SIDEBAR
 ════════════════════════════════════════════════════════════════════ */
 .sidebar {
   background: #0F2D5E !important;
   border: none !important;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.18) !important;
 }
-
-/* MODE SOMBRE : sidebar légèrement plus claire */
 .sidebar--dark {
   background: #0a1f42 !important;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.4) !important;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.45) !important;
 }
 
-/* ── Logo ── */
-.sidebar-logo { background: rgba(0, 0, 0, 0.15); }
+/* ── Logo zone ── */
+.sidebar-logo {
+  background: rgba(0, 0, 0, 0.18);
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+}
 
-/* ── Logo wrapper : cercle blanc fixe ── */
+/* ── Cercle blanc du logo ── */
 .logo-wrapper {
   flex-shrink: 0;
-  width: 46px !important;
-  height: 46px !important;
-  min-width: 46px !important;
-  min-height: 46px !important;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;           /* ← coupe tout ce qui dépasse */
-  box-shadow: 0 0 0 2px rgba(255,255,255,0.25), 0 4px 16px rgba(0,0,0,0.35);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.20),
+    0 4px 18px rgba(0, 0, 0, 0.40);
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
 }
-
 .logo-wrapper:hover {
-  transform: scale(1.06);
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.45), 0 6px 22px rgba(0,0,0,0.45);
+  transform: scale(1.07);
+  box-shadow:
+    0 0 0 4px rgba(255, 255, 255, 0.38),
+    0 6px 24px rgba(0, 0, 0, 0.50);
 }
 
-/* ── Image contrainte dans le cercle ── */
+/* ── Image logo ── */
 .logo-img {
-  width: 42px !important;
-  height: 42px !important;
-  max-width: 42px !important;
-  max-height: 42px !important;
-  object-fit: contain;        /* ← garde les proportions */
-  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
   display: block;
   pointer-events: none;
   user-select: none;
 }
 
-
+/* ── Texte logo ── */
+.logo-text {
+  margin-left: 2px;
+}
 .logo-title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
   color: #ffffff;
-  line-height: 1.1;
-  letter-spacing: 0.5px;
+  line-height: 1.15;
+  letter-spacing: 0.6px;
 }
-
 .logo-sub {
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.45);
-  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.42);
+  letter-spacing: 2.2px;
   text-transform: uppercase;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
+/* ── Séparateur ── */
 .sidebar-divider {
   height: 1px;
   background: rgba(255, 255, 255, 0.08);
-  margin: 0;
 }
 
-/* ── Liens de navigation ── */
+/* ── Label de section ── */
+.nav-section-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.28);
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  padding: 0 10px 7px 10px;
+}
+
+/* ── Liens nav ── */
 .nav-link {
   display: flex;
   align-items: center;
@@ -371,23 +399,20 @@ onUnmounted(() => {
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
-  margin-bottom: 3px;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  margin-bottom: 2px;
+  transition: background 0.15s, color 0.15s, transform 0.12s;
   position: relative;
 }
-
 .nav-link:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.92);
   transform: translateX(2px);
 }
-
 .nav-link.active {
   background: rgba(37, 99, 235, 0.35);
   color: #ffffff;
   font-weight: 600;
 }
-
 .nav-link.active::before {
   content: '';
   position: absolute;
@@ -411,14 +436,8 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.06);
   transition: background 0.15s;
 }
-
-.nav-link.active .nav-icon-wrapper {
-  background: rgba(59, 130, 246, 0.3);
-}
-
-.nav-link:hover .nav-icon-wrapper {
-  background: rgba(255, 255, 255, 0.12);
-}
+.nav-link.active  .nav-icon-wrapper { background: rgba(59, 130, 246, 0.30); }
+.nav-link:hover   .nav-icon-wrapper { background: rgba(255, 255, 255, 0.12); }
 
 .nav-label { flex: 1; }
 
@@ -434,43 +453,31 @@ onUnmounted(() => {
   line-height: 1.4;
 }
 
-/* ── Footer utilisateur ── */
-.sidebar-footer {
-  background: rgba(0, 0, 0, 0.2);
-}
+/* ── Footer ── */
+.sidebar-footer  { background: rgba(0, 0, 0, 0.22); }
 
 .user-avatar {
   background: linear-gradient(135deg, #2563EB, #1D4ED8) !important;
-  flex-shrink: 0;
 }
-
 .avatar-initials {
   font-size: 12px;
   font-weight: 700;
   color: white;
 }
-
 .user-name {
   font-size: 12px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.90);
   line-height: 1.2;
-  max-width: 110px;
+  max-width: 120px;
 }
-
 .user-role {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.38);
   margin-top: 1px;
 }
-
-.logout-btn {
-  color: rgba(255, 255, 255, 0.4) !important;
-  transition: color 0.15s;
-}
-.logout-btn:hover {
-  color: #F87171 !important;
-}
+.logout-btn       { color: rgba(255, 255, 255, 0.38) !important; transition: color 0.15s; }
+.logout-btn:hover { color: #F87171 !important; }
 
 /* ════════════════════════════════════════════════════════════════════
    HEADER
@@ -478,52 +485,48 @@ onUnmounted(() => {
 .app-header {
   background: #ffffff !important;
   border-bottom: 1px solid #E5E7EB !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06) !important;
 }
-
-/* MODE SOMBRE : header */
 .app-header--dark {
   background: #1E293B !important;
   border-bottom: 1px solid #334155 !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.30) !important;
 }
 
-.page-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #111827;
-}
+.page-title       { font-size: 15px; font-weight: 700; color: #111827; }
+.page-title--dark { color: #F1F5F9; }
 
-.page-title--dark {
-  color: #F1F5F9;
+.header-email {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6B7280;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.header-email--dark { color: #9CA3AF; }
 
 .header-avatar {
   background: linear-gradient(135deg, #0F2D5E, #1D4ED8) !important;
 }
-
 .avatar-initials-header {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: white;
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   CONTENU PRINCIPAL
+   CONTENU
 ════════════════════════════════════════════════════════════════════ */
-.main-content {
-  background: #F3F4F6 !important;
-  transition: background 0.3s ease;
-}
-
-.main-content--dark {
-  background: #0F172A !important;
-}
+.main-content       { background: #F3F4F6 !important; transition: background 0.3s; }
+.main-content--dark { background: #0F172A !important; }
 
 /* ════════════════════════════════════════════════════════════════════
    RESPONSIVE
 ════════════════════════════════════════════════════════════════════ */
 @media (max-width: 960px) {
-  .sidebar { position: fixed !important; z-index: 1000 !important; }
+  .sidebar       { position: fixed !important; z-index: 1000 !important; }
+  .header-email  { display: none; }
 }
 </style>

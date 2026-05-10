@@ -13,16 +13,7 @@
             </p>
           </div>
         </div>
-        <v-btn
-          color="primary"
-          variant="elevated"
-          prepend-icon="mdi-content-save-all"
-          :loading="saving"
-          :disabled="saving || loading"
-          @click="saveAll"
-        >
-          Enregistrer tout
-        </v-btn>
+        
       </div>
     </div>
 
@@ -188,14 +179,7 @@
       </v-window>
 
       <!-- ── Résumé dernière modification ─────────────────── -->
-      <v-card class="mt-4 pa-4" elevation="1" rounded="xl" color="surface-variant">
-        <div class="d-flex align-center gap-2">
-          <v-icon size="16" color="success">mdi-check-circle</v-icon>
-          <span class="text-body-2 text-medium-emphasis">
-            {{ lastSaved ? `Dernière sauvegarde : ${lastSaved}` : 'Aucune modification enregistrée dans cette session.' }}
-          </span>
-        </div>
-      </v-card>
+     
     </template>
 
     <!-- ── Snackbar ───────────────────────────────────────── -->

@@ -9,6 +9,14 @@ use Illuminate\Http\JsonResponse;
 
 class SemestreController extends Controller
 {
+    // ── Mapping niveau → semestres autorisés ─────────────────────────────────
+    private const NIVEAU_SEMESTRES = [
+        'L1' => ['S1', 'S2'],
+        'L2' => ['S1', 'S2', 'S3', 'S4'],
+        'L3' => ['S3', 'S4', 'S5', 'S6'],
+    ];
+
+    // ── Admin : tous les semestres ────────────────────────────────────────────
     public function index(): JsonResponse
     {
         $semestres = DB::table('semestres')
@@ -19,6 +27,73 @@ class SemestreController extends Controller
         return response()->json(['success' => true, 'data' => $semestres]);
     }
 
+    // ── Étudiant : semestres filtrés selon son niveau ─────────────────────────
+    public function indexForStudent(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // Récupérer le niveau de l'étudiant
+        $student = DB::table('students')->where('user_id', $user->id)->first();
+
+        if (!$student) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Étudiant introuvable.',
+            ], 404);
+        }
+
+        // Récupérer le code du niveau (ex: "L1", "L2", "L3")
+        $niveau = DB::table('niveaux')->where('id', $student->niveau_id)->first();
+
+        if (!$niveau) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Niveau introuvable.',
+            ], 404);
+        }
+
+        $niveauCode = strtoupper(trim($niveau->code)); // "L1", "L2", "L3"
+
+        // Codes de semestres autorisés pour ce niveau
+        $allowedCodes = self::NIVEAU_SEMESTRES[$niveauCode] ?? [];
+
+        if (empty($allowedCodes)) {
+            return response()->json([
+                'success' => true,
+                'data'    => [],
+                'message' => "Aucun semestre configuré pour le niveau {$niveauCode}.",
+            ]);
+        }
+
+        // Récupérer les semestres ouverts correspondant au niveau
+        $semestres = DB::table('semestres')
+            ->whereIn('code', $allowedCodes)
+            ->where(function ($query) {
+                $query->where('is_open', true)
+                      ->orWhere('is_exam_open', true)
+                      ->orWhere('is_rattrapage_open', true);
+            })
+            ->orderBy('order_index', 'asc')
+            ->get()
+            ->map(function ($s) {
+                // Calculer les types disponibles selon les ouvertures
+                $types = [];
+                if ($s->is_open)           $types[] = 'cc';
+                if ($s->is_exam_open)      $types[] = 'examen';
+                if ($s->is_rattrapage_open) $types[] = 'rattrapage';
+
+                $s->available_types = $types;
+                return $s;
+            });
+
+        return response()->json([
+            'success' => true,
+            'data'    => $semestres,
+            'niveau'  => $niveauCode,
+        ]);
+    }
+
+    // ── Créer un semestre ─────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -30,11 +105,11 @@ class SemestreController extends Controller
         ]);
 
         $id = DB::table('semestres')->insertGetId(array_merge($data, [
-            'is_open'             => false,
-            'is_exam_open'        => false,
-            'is_rattrapage_open'  => false,
-            'created_at'          => now(),
-            'updated_at'          => now(),
+            'is_open'            => false,
+            'is_exam_open'       => false,
+            'is_rattrapage_open' => false,
+            'created_at'         => now(),
+            'updated_at'         => now(),
         ]));
 
         $semestre = DB::table('semestres')->where('id', $id)->first();
@@ -46,11 +121,15 @@ class SemestreController extends Controller
         ], 201);
     }
 
+    // ── Mettre à jour un semestre ─────────────────────────────────────────────
     public function update(Request $request, $id): JsonResponse
     {
         $semestre = DB::table('semestres')->where('id', $id)->first();
         if (!$semestre) {
-            return response()->json(['success' => false, 'message' => 'Semestre introuvable.'], 404);
+            return response()->json([
+                'success' => false,
+                'message' => 'Semestre introuvable.',
+            ], 404);
         }
 
         $data = $request->validate([
@@ -67,34 +146,50 @@ class SemestreController extends Controller
 
         $semestre = DB::table('semestres')->where('id', $id)->first();
 
-        return response()->json(['success' => true, 'message' => 'Semestre mis à jour.', 'data' => $semestre]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Semestre mis à jour.',
+            'data'    => $semestre,
+        ]);
     }
 
-    public function toggle($id)
-{
-    $semestre = DB::table('semestres')->find($id);
-    $newValue = !$semestre->is_open;
+    // ── Ouvrir / Fermer réclamations CC ──────────────────────────────────────
+    public function toggle($id): JsonResponse
+    {
+        $semestre = DB::table('semestres')->find($id);
 
-    DB::table('semestres')
-        ->where('id', $id)
-        ->update([
+        if (!$semestre) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Semestre introuvable.',
+            ], 404);
+        }
+
+        $newValue = !(bool) $semestre->is_open;
+
+        DB::table('semestres')->where('id', $id)->update([
             'is_open'    => $newValue,
             'updated_at' => now(),
         ]);
 
-    return response()->json([
-        'success'  => true,
-        'is_open'  => $newValue,
-        'message'  => $newValue ? 'Semestre ouvert aux réclamations.' : 'Semestre fermé.',
-    ]);
-}
+        return response()->json([
+            'success' => true,
+            'is_open' => $newValue,
+            'message' => $newValue
+                ? "Semestre {$semestre->code} ouvert aux réclamations CC."
+                : "Semestre {$semestre->code} fermé aux réclamations CC.",
+        ]);
+    }
 
-
+    // ── Ouvrir / Fermer examens ───────────────────────────────────────────────
     public function toggleExam($id): JsonResponse
     {
         $semestre = DB::table('semestres')->where('id', $id)->first();
         if (!$semestre) {
-            return response()->json(['success' => false, 'message' => 'Semestre introuvable.'], 404);
+            return response()->json([
+                'success' => false,
+                'message' => 'Semestre introuvable.',
+            ], 404);
         }
 
         $newState = !(bool) $semestre->is_exam_open;
@@ -111,14 +206,22 @@ class SemestreController extends Controller
             ? "Examens du semestre {$semestre->code} ouverts."
             : "Examens du semestre {$semestre->code} fermés.";
 
-        return response()->json(['success' => true, 'message' => $msg, 'data' => $semestre]);
+        return response()->json([
+            'success' => true,
+            'message' => $msg,
+            'data'    => $semestre,
+        ]);
     }
 
+    // ── Ouvrir / Fermer rattrapage ────────────────────────────────────────────
     public function toggleRattrapage($id): JsonResponse
     {
         $semestre = DB::table('semestres')->where('id', $id)->first();
         if (!$semestre) {
-            return response()->json(['success' => false, 'message' => 'Semestre introuvable.'], 404);
+            return response()->json([
+                'success' => false,
+                'message' => 'Semestre introuvable.',
+            ], 404);
         }
 
         $newState = !(bool) $semestre->is_rattrapage_open;
@@ -135,6 +238,10 @@ class SemestreController extends Controller
             ? "Rattrapage du semestre {$semestre->code} ouvert."
             : "Rattrapage du semestre {$semestre->code} fermé.";
 
-        return response()->json(['success' => true, 'message' => $msg, 'data' => $semestre]);
+        return response()->json([
+            'success' => true,
+            'message' => $msg,
+            'data'    => $semestre,
+        ]);
     }
 }

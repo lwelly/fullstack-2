@@ -42,8 +42,8 @@ Route::prefix('v1')->group(function () {
         Route::post('login', [AuthController::class, 'login']);
 
         // ── Reconnaissance d'appareil (Device OTP) ────────────────
-        Route::post('verify-device-otp', [AuthController::class, 'verifyDeviceOtp']); // Valider OTP + enregistrer appareil
-        Route::post('resend-device-otp', [AuthController::class, 'resendDeviceOtp']); // Renvoyer OTP appareil
+        Route::post('verify-device-otp', [AuthController::class, 'verifyDeviceOtp']);
+        Route::post('resend-device-otp', [AuthController::class, 'resendDeviceOtp']);
 
         // ── 2FA ────────────────────────────────────────────────────
         Route::prefix('2fa')->group(function () {
@@ -52,9 +52,9 @@ Route::prefix('v1')->group(function () {
         });
 
         // ── Mot de passe oublié (3 étapes) ────────────────────────
-        Route::post('forgot-password',            [AuthController::class, 'forgotPassword']);   // Étape 1
-        Route::post('forgot-password/verify-otp', [AuthController::class, 'forgotVerifyOtp']); // Étape 2
-        Route::post('reset-password',             [AuthController::class, 'resetPassword']);    // Étape 3
+        Route::post('forgot-password',            [AuthController::class, 'forgotPassword']);
+        Route::post('forgot-password/verify-otp', [AuthController::class, 'forgotVerifyOtp']);
+        Route::post('reset-password',             [AuthController::class, 'resetPassword']);
 
         // ── Routes protégées ───────────────────────────────────────
         Route::middleware('auth:sanctum')->group(function () {
@@ -215,9 +215,55 @@ Route::prefix('v1')->group(function () {
         // ── Dashboard ──────────────────────────────────────────────
         Route::get('dashboard', [StudentDashboard::class, 'index'])->name('dashboard');
 
-        // ── Semestres ouverts aux réclamations ─────────────────────
-        Route::get('semestres', function () {
+        // ── Semestres filtrés par niveau étudiant ──────────────────
+        // L1 → S1, S2 | L2 → S1, S2, S3, S4 | L3 → S3, S4, S5, S6
+        Route::get('semestres', function (\Illuminate\Http\Request $request) {
+
+            // Mapping niveau → codes semestres autorisés
+            $niveauSemestres = [
+                'L1' => ['S1', 'S2'],
+                'L2' => ['S1', 'S2', 'S3', 'S4'],
+                'L3' => ['S3', 'S4', 'S5', 'S6'],
+            ];
+
+            $user = $request->user();
+
+            // Récupérer l'étudiant connecté
+            $student = DB::table('students')->where('user_id', $user->id)->first();
+
+            if (!$student) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profil étudiant introuvable.',
+                ], 404);
+            }
+
+            // Récupérer le niveau de l'étudiant
+            $niveau = DB::table('niveaux')->where('id', $student->niveau_id)->first();
+
+            if (!$niveau) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Niveau introuvable.',
+                ], 404);
+            }
+
+            $niveauCode   = strtoupper(trim($niveau->code)); // "L1", "L2", "L3"
+            $allowedCodes = $niveauSemestres[$niveauCode] ?? [];
+
+            // Aucune configuration pour ce niveau
+            if (empty($allowedCodes)) {
+                return response()->json([
+                    'success' => true,
+                    'data'    => [],
+                    'niveau'  => $niveauCode,
+                    'message' => "Aucun semestre configuré pour le niveau {$niveauCode}.",
+                ]);
+            }
+
+            // Récupérer uniquement les semestres ouverts ET autorisés pour ce niveau
             $semestres = DB::table('semestres')
+                ->whereIn('code', $allowedCodes)
                 ->where(function ($q) {
                     $q->where('is_open',             true)
                       ->orWhere('is_exam_open',       true)
@@ -253,7 +299,12 @@ Route::prefix('v1')->group(function () {
                     ];
                 });
 
-            return response()->json(['success' => true, 'data' => $semestres]);
+            return response()->json([
+                'success' => true,
+                'data'    => $semestres,
+                'niveau'  => $niveauCode,
+            ]);
+
         })->name('semestres.index');
 
         // ── Notes ──────────────────────────────────────────────────

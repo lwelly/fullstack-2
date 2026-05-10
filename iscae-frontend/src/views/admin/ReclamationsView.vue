@@ -10,16 +10,7 @@
           {{ meta.total ?? list.length }} réclamation(s) au total
         </p>
       </div>
-      <v-btn
-        variant="tonal"
-        color="#0F2D5E"
-        size="small"
-        prepend-icon="mdi-download"
-        rounded="lg"
-        @click="exportCsv"
-      >
-        Exporter CSV
-      </v-btn>
+     
     </div>
 
     <!-- ───── Filtres statut ───── -->
@@ -80,16 +71,7 @@
           @update:model-value="load(1)"
         />
         <v-spacer />
-        <v-btn
-          variant="text"
-          color="primary"
-          size="small"
-          prepend-icon="mdi-refresh"
-          :loading="loading"
-          @click="load(page)"
-        >
-          Actualiser
-        </v-btn>
+        
       </div>
     </v-card>
 

@@ -35,7 +35,31 @@
       </div>
     </div>
 
-    <!-- ───── Alerte globale ───── -->
+    <!-- ───── Alerte niveau ───── -->
+    <v-alert
+      v-if="niveauCode"
+      type="info"
+      variant="tonal"
+      density="compact"
+      class="mb-4"
+      icon="mdi-school-outline"
+    >
+      Vous êtes en <strong>{{ niveauCode }}</strong> 
+    </v-alert>
+
+    <!-- ───── Alerte si aucun semestre ouvert ───── -->
+    <v-alert
+      v-if="!loadingSemestres && semestres.length === 0"
+      type="warning"
+      variant="tonal"
+      class="mb-4"
+      icon="mdi-calendar-remove-outline"
+    >
+      Aucun semestre n'est actuellement ouvert aux réclamations pour votre niveau
+      <strong>{{ niveauCode }}</strong>. Contactez l'administration.
+    </v-alert>
+
+    <!-- ───── Alerte globale erreur ───── -->
     <v-alert
       v-if="globalError"
       type="error"
@@ -47,9 +71,9 @@
       {{ globalError }}
     </v-alert>
 
-    <!-- ════════════════════════════════════════
+    <!-- ══════════════════════════════════════════════════════════
          ÉTAPE 1 — Type, Semestre, Module, Notes
-    ════════════════════════════════════════ -->
+    ══════════════════════════════════════════════════════════ -->
     <v-card v-if="step === 1" variant="elevated" rounded="lg" class="pa-6 mb-4">
       <div class="text-h6 font-weight-bold mb-1">Informations de la réclamation</div>
       <div class="text-body-2 text-medium-emphasis mb-5">
@@ -70,6 +94,7 @@
         prepend-inner-icon="mdi-calendar-clock"
         class="mb-4"
         clearable
+        no-data-text="Aucun semestre disponible pour votre niveau"
       >
         <template #item="{ props, item }">
           <v-list-item v-bind="props">
@@ -189,9 +214,9 @@
       />
     </v-card>
 
-    <!-- ════════════════════════════════════════
+    <!-- ══════════════════════════════════════════════════════════
          ÉTAPE 2 — Justification & Document
-    ════════════════════════════════════════ -->
+    ══════════════════════════════════════════════════════════ -->
     <v-card v-if="step === 2" variant="elevated" rounded="lg" class="pa-6 mb-4">
       <div class="text-h6 font-weight-bold mb-1">Justification</div>
       <div class="text-body-2 text-medium-emphasis mb-5">
@@ -261,9 +286,9 @@
       </div>
     </v-card>
 
-    <!-- ════════════════════════════════════════
+    <!-- ══════════════════════════════════════════════════════════
          ÉTAPE 3 — Confirmation
-    ════════════════════════════════════════ -->
+    ══════════════════════════════════════════════════════════ -->
     <v-card v-if="step === 3" variant="elevated" rounded="lg" class="pa-6 mb-4">
       <div class="text-h6 font-weight-bold mb-1">Récapitulatif</div>
       <div class="text-body-2 text-medium-emphasis mb-5">
@@ -383,17 +408,18 @@ import api from '@/api/axios'
 
 const router = useRouter()
 
-// ── État ──────────────────────────────────────────────────────────────
-const step         = ref(1)
-const stepTitles   = ['Type & Module', 'Justification', 'Confirmation']
-const submitting   = ref(false)
-const confirmed    = ref(false)
-const isDragging   = ref(false)
-const globalError  = ref('')
-const errors       = ref({})
-const fileInput    = ref(null)
-const docFile      = ref(null)
-const snack        = ref({ show: false, text: '', color: 'success' })
+// ── État ──────────────────────────────────────────────────────────────────────
+const step          = ref(1)
+const stepTitles    = ['Type & Module', 'Justification', 'Confirmation']
+const submitting    = ref(false)
+const confirmed     = ref(false)
+const isDragging    = ref(false)
+const globalError   = ref('')
+const errors        = ref({})
+const fileInput     = ref(null)
+const docFile       = ref(null)
+const snack         = ref({ show: false, text: '', color: 'success' })
+const niveauCode    = ref('')   // "L1", "L2", "L3"
 
 const semestres        = ref([])
 const modules          = ref([])
@@ -409,7 +435,14 @@ const form = ref({
   justification : '',
 })
 
-// ── Types disponibles ─────────────────────────────────────────────────
+// ── Mapping niveau → codes semestres autorisés ────────────────────────────────
+const NIVEAU_SEMESTRES = {
+  L1: ['S1', 'S2'],
+  L2: ['S1', 'S2', 'S3', 'S4'],
+  L3: ['S3', 'S4', 'S5', 'S6'],
+}
+
+// ── Types disponibles ─────────────────────────────────────────────────────────
 const ALL_TYPES = [
   {
     value : 'cc',
@@ -437,13 +470,13 @@ const ALL_TYPES = [
   },
 ]
 
-// ── Computed ──────────────────────────────────────────────────────────
+// ── Computed ──────────────────────────────────────────────────────────────────
 const currentSemestre = computed(() =>
   semestres.value.find(s => s.id === form.value.semestre_id) ?? null
 )
 
 const reclamationTypes = computed(() => {
-  if (! currentSemestre.value) return []
+  if (!currentSemestre.value) return []
   const avail = currentSemestre.value.available_types ?? []
   return ALL_TYPES.filter(t => avail.includes(t.value))
 })
@@ -456,21 +489,27 @@ const moduleLabel = computed(() =>
   modules.value.find(m => m.id === form.value.module_id)?.name ?? '—'
 )
 
+// Label des semestres autorisés pour l'alerte info
+const allowedSemestreLabels = computed(() => {
+  const codes = NIVEAU_SEMESTRES[niveauCode.value] ?? []
+  return codes.join(', ')
+})
+
 const canNext = computed(() => {
   if (step.value === 1) {
     const noteOk = form.value.note_actuelle !== '' &&
-                   ! isNaN(Number(form.value.note_actuelle)) &&
+                   !isNaN(Number(form.value.note_actuelle)) &&
                    Number(form.value.note_actuelle) >= 0 &&
                    Number(form.value.note_actuelle) <= 20
     const noteRecOk = form.value.type !== 'cc' ||
                       form.value.note_reclamee === '' ||
                       form.value.note_reclamee === null ||
-                      (! isNaN(Number(form.value.note_reclamee)) &&
+                      (!isNaN(Number(form.value.note_reclamee)) &&
                        Number(form.value.note_reclamee) >= 0 &&
                        Number(form.value.note_reclamee) <= 20)
-    return !! form.value.semestre_id &&
-           !! form.value.type &&
-           !! form.value.module_id &&
+    return !!form.value.semestre_id &&
+           !!form.value.type &&
+           !!form.value.module_id &&
            noteOk &&
            noteRecOk
   }
@@ -480,18 +519,18 @@ const canNext = computed(() => {
   return true
 })
 
-// ── Règles de validation ──────────────────────────────────────────────
+// ── Règles de validation ──────────────────────────────────────────────────────
 const noteRules = [
   v => (v !== '' && v !== null && v !== undefined) || 'La note est obligatoire',
-  v => ! isNaN(Number(v))                          || 'Doit être un nombre',
+  v => !isNaN(Number(v))                           || 'Doit être un nombre',
   v => Number(v) >= 0                              || 'La note minimale est 0',
   v => Number(v) <= 20                             || 'La note maximale est 20',
 ]
 
 const noteReclameRules = [
-  v => (v === '' || v === null || ! isNaN(Number(v)))  || 'Doit être un nombre',
-  v => (v === '' || v === null || Number(v) >= 0)       || 'La note minimale est 0',
-  v => (v === '' || v === null || Number(v) <= 20)      || 'La note maximale est 20',
+  v => (v === '' || v === null || !isNaN(Number(v))) || 'Doit être un nombre',
+  v => (v === '' || v === null || Number(v) >= 0)    || 'La note minimale est 0',
+  v => (v === '' || v === null || Number(v) <= 20)   || 'La note maximale est 20',
 ]
 
 const justifRules = [
@@ -499,7 +538,7 @@ const justifRules = [
   v => (v && v.trim().length <= 1000) || 'Maximum 1000 caractères',
 ]
 
-// ── Helpers notes ─────────────────────────────────────────────────────
+// ── Helpers notes ─────────────────────────────────────────────────────────────
 function clampNote(val) {
   if (val === '' || val === null || val === undefined) return val
   const n = parseFloat(val)
@@ -509,9 +548,9 @@ function clampNote(val) {
   return String(Math.round(n * 100) / 100)
 }
 
-// ── Helpers types ─────────────────────────────────────────────────────
-function typeLabel(val)      { return ALL_TYPES.find(t => t.value === val)?.label ?? val }
-function typeChipColor(val)  { return ALL_TYPES.find(t => t.value === val)?.color ?? 'grey' }
+// ── Helpers types ─────────────────────────────────────────────────────────────
+function typeLabel(val)     { return ALL_TYPES.find(t => t.value === val)?.label ?? val }
+function typeChipColor(val) { return ALL_TYPES.find(t => t.value === val)?.color ?? 'grey' }
 function typeChipStyle(val) {
   const t = ALL_TYPES.find(x => x.value === val)
   return t ? { background: t.bg, color: '#fff' } : {}
@@ -522,22 +561,22 @@ function selectType(val) {
   delete errors.value.type
 }
 
-// ── Helpers fichiers ──────────────────────────────────────────────────
+// ── Helpers fichiers ──────────────────────────────────────────────────────────
 function fileIcon(f) {
-  if (! f) return 'mdi-file'
-  if (f.type === 'application/pdf')    return 'mdi-file-pdf-box'
-  if (f.type.startsWith('image/'))     return 'mdi-file-image'
+  if (!f) return 'mdi-file'
+  if (f.type === 'application/pdf')  return 'mdi-file-pdf-box'
+  if (f.type.startsWith('image/'))   return 'mdi-file-image'
   return 'mdi-file'
 }
 function fileIconColor(f) {
-  if (! f) return 'grey'
-  if (f.type === 'application/pdf')    return 'red'
-  if (f.type.startsWith('image/'))     return 'blue'
+  if (!f) return 'grey'
+  if (f.type === 'application/pdf')  return 'red'
+  if (f.type.startsWith('image/'))   return 'blue'
   return 'grey'
 }
 function formatSize(bytes) {
-  if (bytes < 1024)         return bytes + ' o'
-  if (bytes < 1024 * 1024)  return (bytes / 1024).toFixed(1) + ' Ko'
+  if (bytes < 1024)        return bytes + ' o'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko'
   return (bytes / (1024 * 1024)).toFixed(1) + ' Mo'
 }
 
@@ -545,7 +584,7 @@ const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'
 const MAX_SIZE      = 5 * 1024 * 1024
 
 function addFile(file) {
-  if (! ALLOWED_TYPES.includes(file.type)) {
+  if (!ALLOWED_TYPES.includes(file.type)) {
     errors.value.document = 'Type non accepté (PDF, JPG, PNG uniquement)'
     return
   }
@@ -571,17 +610,18 @@ function removeDoc() {
   if (fileInput.value) fileInput.value.value = ''
 }
 
-// ── Notification ──────────────────────────────────────────────────────
+// ── Notification ──────────────────────────────────────────────────────────────
 function notify(text, color = 'success') {
   snack.value = { show: true, text, color }
 }
 
-// ── Chargement données ────────────────────────────────────────────────
+// ── Chargement semestres (filtrés par niveau côté backend) ────────────────────
 async function loadSemestres() {
   loadingSemestres.value = true
   try {
     const res = await api.get('/student/semestres')
-    semestres.value = res.data?.data ?? []
+    semestres.value  = res.data?.data    ?? []
+    niveauCode.value = res.data?.niveau  ?? ''
   } catch {
     notify('Impossible de charger les semestres', 'error')
   } finally {
@@ -590,7 +630,7 @@ async function loadSemestres() {
 }
 
 async function loadModules(semestreId) {
-  if (! semestreId) { modules.value = []; return }
+  if (!semestreId) { modules.value = []; return }
   loadingModules.value = true
   try {
     const res = await api.get('/student/modules', { params: { semestre_id: semestreId } })
@@ -602,7 +642,7 @@ async function loadModules(semestreId) {
   }
 }
 
-// ── Watchers ──────────────────────────────────────────────────────────
+// ── Watchers ──────────────────────────────────────────────────────────────────
 watch(() => form.value.semestre_id, (id) => {
   form.value.type          = ''
   form.value.module_id     = null
@@ -611,14 +651,14 @@ watch(() => form.value.semestre_id, (id) => {
   loadModules(id)
 })
 
-// ── Navigation étapes ─────────────────────────────────────────────────
+// ── Navigation étapes ─────────────────────────────────────────────────────────
 function goNext() {
   const e = {}
 
   if (step.value === 1) {
-    if (! form.value.semestre_id) e.semestre_id = 'Sélectionnez un semestre'
-    if (! form.value.type)        e.type        = 'Sélectionnez un type'
-    if (! form.value.module_id)   e.module_id   = 'Sélectionnez un module'
+    if (!form.value.semestre_id) e.semestre_id = 'Sélectionnez un semestre'
+    if (!form.value.type)        e.type        = 'Sélectionnez un type'
+    if (!form.value.module_id)   e.module_id   = 'Sélectionnez un module'
 
     const na = Number(form.value.note_actuelle)
     if (form.value.note_actuelle === '' || form.value.note_actuelle === null) {
@@ -627,7 +667,9 @@ function goNext() {
       e.note_actuelle = 'La note doit être entre 0 et 20'
     }
 
-    if (form.value.type === 'cc' && form.value.note_reclamee !== '' && form.value.note_reclamee !== null) {
+    if (form.value.type === 'cc' &&
+        form.value.note_reclamee !== '' &&
+        form.value.note_reclamee !== null) {
       const nr = Number(form.value.note_reclamee)
       if (isNaN(nr) || nr < 0 || nr > 20) {
         e.note_reclamee = 'La note réclamée doit être entre 0 et 20'
@@ -636,7 +678,7 @@ function goNext() {
   }
 
   if (step.value === 2) {
-    if (! form.value.justification || form.value.justification.trim().length < 20) {
+    if (!form.value.justification || form.value.justification.trim().length < 20) {
       e.justification = 'Minimum 20 caractères requis'
     }
   }
@@ -645,9 +687,9 @@ function goNext() {
   if (Object.keys(e).length === 0) step.value++
 }
 
-// ── Soumission ────────────────────────────────────────────────────────
+// ── Soumission ────────────────────────────────────────────────────────────────
 async function submit() {
-  if (! confirmed.value) {
+  if (!confirmed.value) {
     notify('Veuillez cocher la case de confirmation.', 'warning')
     return
   }
@@ -655,7 +697,6 @@ async function submit() {
   submitting.value  = true
   globalError.value = ''
 
-  // ── Construction du FormData ───────────────────────────────────────
   const fd = new FormData()
   fd.append('semestre_id',   form.value.semestre_id)
   fd.append('module_id',     form.value.module_id)
@@ -674,28 +715,18 @@ async function submit() {
 
   try {
     const res = await api.post('/student/reclamations', fd, {
-      // ← undefined laisse Axios générer le bon boundary multipart
       headers: { 'Content-Type': undefined },
     })
 
-    // ── Extraire l'ID retourné par l'API ───────────────────────────
     const payload = res.data?.data ?? res.data ?? {}
     const newId   = payload.id ?? payload.reclamation_id ?? null
 
-    console.log('[NewReclamation] submit success – id:', newId, 'payload:', payload)
-
     notify('Réclamation soumise avec succès ! Redirection…', 'success')
 
-    // ── Redirection vers le détail après 1.2 s ─────────────────────
     setTimeout(() => {
       if (newId) {
-        // ✅ Nom de route correct : student.reclamation.detail (sans 's')
-        router.push({
-          name  : 'student.reclamation.detail',
-          params: { id: String(newId) },
-        })
+        router.push({ name: 'student.reclamation.detail', params: { id: String(newId) } })
       } else {
-        // Fallback si l'API ne retourne pas l'ID
         router.push({ name: 'student.reclamations' })
       }
     }, 1200)
@@ -704,15 +735,12 @@ async function submit() {
     const status = err.response?.status
     const body   = err.response?.data
 
-    console.error('[NewReclamation] submit error – status:', status, 'body:', body)
-
     if (status === 422) {
       const valErrors = body?.errors ?? {}
       globalError.value = body?.message || 'Veuillez corriger les erreurs ci-dessous.'
       errors.value = Object.fromEntries(
         Object.entries(valErrors).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])
       )
-      // Revenir à l'étape qui contient les erreurs
       const step1 = ['semestre_id', 'module_id', 'type', 'note_actuelle', 'note_reclamee']
       const step2 = ['justification', 'document']
       if (step1.some(f => errors.value[f]))      step.value = 1
@@ -735,7 +763,7 @@ async function submit() {
   }
 }
 
-// ── Montage ───────────────────────────────────────────────────────────
+// ── Montage ───────────────────────────────────────────────────────────────────
 onMounted(loadSemestres)
 </script>
 
@@ -745,10 +773,10 @@ onMounted(loadSemestres)
   padding-bottom: 80px;
 }
 
-/* ── En-tête ─────────────────────────────────────────────────────── */
+/* ── En-tête ──────────────────────────────────────────────────────────────── */
 .page-header { padding: 0 4px; }
 
-/* ── Grille types ────────────────────────────────────────────────── */
+/* ── Grille types ─────────────────────────────────────────────────────────── */
 .type-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -782,7 +810,7 @@ onMounted(loadSemestres)
 .type-card__label { font-weight: 600; font-size: 0.85rem; margin-bottom: 2px; }
 .type-card__desc  { font-size: 0.72rem; opacity: 0.75; }
 
-/* ── Zone upload ─────────────────────────────────────────────────── */
+/* ── Zone upload ──────────────────────────────────────────────────────────── */
 .upload-zone {
   border: 2px dashed rgba(var(--v-theme-primary), 0.35);
   border-radius: 12px;
@@ -798,7 +826,7 @@ onMounted(loadSemestres)
   background: rgba(var(--v-theme-primary), 0.07);
 }
 
-/* ── Aperçu fichier ──────────────────────────────────────────────── */
+/* ── Aperçu fichier ───────────────────────────────────────────────────────── */
 .file-preview {
   display: flex;
   align-items: center;
@@ -808,11 +836,11 @@ onMounted(loadSemestres)
   background: rgba(var(--v-theme-primary), 0.05);
   border: 1px solid rgba(var(--v-theme-primary), 0.15);
 }
-.file-preview__info   { flex: 1; min-width: 0; }
-.file-preview__name   { font-weight: 500; font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-preview__size   { font-size: 0.75rem; color: rgba(0, 0, 0, 0.5); }
+.file-preview__info  { flex: 1; min-width: 0; }
+.file-preview__name  { font-weight: 500; font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-preview__size  { font-size: 0.75rem; color: rgba(0, 0, 0, 0.5); }
 
-/* ── Récapitulatif ───────────────────────────────────────────────── */
+/* ── Récapitulatif ────────────────────────────────────────────────────────── */
 .recap-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -836,7 +864,7 @@ onMounted(loadSemestres)
 }
 .recap-value { font-size: 0.9rem; font-weight: 500; word-break: break-word; }
 
-/* ── Barre navigation ────────────────────────────────────────────── */
+/* ── Barre navigation ─────────────────────────────────────────────────────── */
 .nav-bar {
   display: flex;
   align-items: center;

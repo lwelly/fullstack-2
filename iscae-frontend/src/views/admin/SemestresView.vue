@@ -9,9 +9,7 @@
           Gérez les semestres, les périodes de réclamation, d'examen et de rattrapage.
         </p>
       </div>
-      <v-btn color="#0F2D5E" rounded="lg" prepend-icon="mdi-plus" @click="openCreateDialog">
-        Nouveau semestre
-      </v-btn>
+     
     </div>
 
     <!-- ─── Chargement ───────────────────────────────────────────── -->
