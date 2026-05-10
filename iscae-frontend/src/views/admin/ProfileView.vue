@@ -5,9 +5,9 @@
       <div class="d-flex align-center gap-3">
         <v-icon size="32" color="primary">mdi-account-circle</v-icon>
         <div>
-          <h1 class="text-h5 font-weight-bold">Mon Profil</h1>
+          <h1 class="text-h5 font-weight-bold">Gérez vos informations personnelles et vos paramètres de sécurité</h1>
           <p class="text-body-2 text-medium-emphasis mb-0">
-            Gérez vos informations personnelles et vos paramètres de sécurité
+            
           </p>
         </div>
       </div>

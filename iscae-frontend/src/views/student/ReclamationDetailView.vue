@@ -14,8 +14,7 @@
           @click="router.push('/student/reclamations')"
         />
         <div>
-          <h1 class="page-title">Détail Réclamation</h1>
-          <p class="page-subtitle">Suivez l'état de votre réclamation</p>
+          <h1 class="page-title">Suivez l'état de votre réclamation</h1>
         </div>
       </div>
       <div class="header-right" v-if="rec">

@@ -4,7 +4,6 @@
     <!-- ─── En-tête ───────────────────────────────────────────── -->
     <div class="profile-header mb-6">
       <div>
-        <h1 class="page-title">Mon Profil</h1>
         <p class="page-sub">Gérez vos informations personnelles et votre sécurité</p>
       </div>
       <v-chip color="#0D4F3C" variant="tonal" size="small" prepend-icon="mdi-check-circle">

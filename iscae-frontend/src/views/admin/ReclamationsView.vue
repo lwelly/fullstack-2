@@ -4,7 +4,6 @@
     <!-- ───── En-tête ───── -->
     <div class="page-header mb-6">
       <div>
-        <h1 class="page-title">Réclamations</h1>
         <p class="page-sub">
           <v-icon size="14" color="#6B7280" class="mr-1">mdi-file-document-multiple</v-icon>
           {{ meta.total ?? list.length }} réclamation(s) au total
@@ -428,17 +427,6 @@
                       <v-icon start size="15">mdi-content-save-outline</v-icon>
                       Enregistrer
                     </v-btn>
-                    <v-btn
-                      v-if="!selected.is_escalated"
-                      variant="tonal"
-                      color="orange"
-                      rounded="lg"
-                      size="small"
-                      @click="escalateDialog = true"
-                    >
-                      <v-icon start size="15">mdi-arrow-up-circle-outline</v-icon>
-                      Escalader
-                    </v-btn>
                   </div>
                 </div>
               </div>
@@ -860,8 +848,8 @@ function avatarColor(name) {
 }
 
 const TYPE_LABELS = {
-  cc:         'Contrôle Continu',
-  controle:   'Contrôle Continu',
+  cc:         'Devoir',
+  controle:   'Devoir',
   examen:     'Examen',
   exam:       'Examen',
   rattrapage: 'Rattrapage',

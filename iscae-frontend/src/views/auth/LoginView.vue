@@ -33,20 +33,7 @@
 
             <!-- Stats décoratifs -->
             <div class="brand-stats mt-8 d-flex gap-6">
-              <div class="stat-item text-center">
-                <div class="stat-number">500+</div>
-                <div class="stat-label">Étudiants</div>
-              </div>
-              <div class="stat-divider" />
-              <div class="stat-item text-center">
-                <div class="stat-number">98%</div>
-                <div class="stat-label">Satisfaction</div>
-              </div>
-              <div class="stat-divider" />
-              <div class="stat-item text-center">
-                <div class="stat-number">24h</div>
-                <div class="stat-label">Réponse</div>
-              </div>
+             
             </div>
 
             <!-- Cercles décoratifs -->

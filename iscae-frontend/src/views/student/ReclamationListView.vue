@@ -268,6 +268,7 @@ function typeColor(t) {
 .reclamation-card {
   transition: transform 0.2s, box-shadow 0.2s;
   cursor: pointer;
+  width: 100%;
 }
 .reclamation-card:hover {
   transform: translateY(-2px);

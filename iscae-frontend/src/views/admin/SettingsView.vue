@@ -7,9 +7,9 @@
         <div class="d-flex align-center gap-3">
           <v-icon size="32" color="primary">mdi-cog</v-icon>
           <div>
-            <h1 class="text-h5 font-weight-bold">Paramètres système</h1>
+            <h1 class="text-h5 font-weight-bold">Configuration générale de l'application ISCAE</h1>
             <p class="text-body-2 text-medium-emphasis mb-0">
-              Configuration générale de l'application ISCAE
+              
             </p>
           </div>
         </div>

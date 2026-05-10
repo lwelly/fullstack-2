@@ -7,7 +7,6 @@
     <div class="page-header mb-6">
       <div class="d-flex align-center justify-space-between flex-wrap gap-3">
         <div>
-          <h1 class="page-title">Mes Réclamations</h1>
           <p class="page-subtitle">
             {{ list.length }} réclamation{{ list.length > 1 ? 's' : '' }} au total
           </p>
@@ -186,15 +185,15 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api/axios'
 
-const router   = useRouter()
-const loading  = ref(true)
-const list     = ref([])
-const search   = ref('')
+const router       = useRouter()
+const loading      = ref(true)
+const list         = ref([])
+const search       = ref('')
 const activeFilter = ref('all')
-const page     = ref(1)
-const PER_PAGE = 10
+const page         = ref(1)
+const PER_PAGE     = 10
 
-// ── Filtres ───────────────────────────────────────────────────────────
+// ── Filtres ────────────────────────────────────────────────────────────
 const filters = [
   { key: 'all',      label: 'Toutes',     icon: 'mdi-format-list-bulleted' },
   { key: 'pending',  label: 'En attente', icon: 'mdi-clock-outline'        },
@@ -217,7 +216,7 @@ function setFilter(key) {
   page.value = 1
 }
 
-// ── Données filtrées ──────────────────────────────────────────────────
+// ── Données filtrées ───────────────────────────────────────────────────
 const filtered = computed(() => {
   let res = list.value
 
@@ -238,34 +237,36 @@ const filtered = computed(() => {
   return [...res].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 })
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / PER_PAGE)))
-const paginated  = computed(() =>
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filtered.value.length / PER_PAGE))
+)
+const paginated = computed(() =>
   filtered.value.slice((page.value - 1) * PER_PAGE, page.value * PER_PAGE)
 )
 
-// ── Labels & couleurs statut ──────────────────────────────────────────
+// ── Labels statut ──────────────────────────────────────────────────────
 const STATUS_LABELS = {
-  submitted: 'Soumise',
-  received:  'Reçue',
-  in_review: 'En cours',
-  escalated: 'Escaladée',
-  resolved:  'Résolue',
-  rejected:  'Rejetée',
-  closed:    'Fermée',
-  cancelled: 'Annulée',
+  submitted : 'Soumise',
+  received  : 'Reçue',
+  in_review : 'En cours',
+  escalated : 'Escaladée',
+  resolved  : 'Résolue',
+  rejected  : 'Rejetée',
+  closed    : 'Fermée',
+  cancelled : 'Annulée',
 }
 const sLabel = s => STATUS_LABELS[s] ?? s ?? '—'
 
-// ── Labels type ───────────────────────────────────────────────────────
+// ── Labels type ────────────────────────────────────────────────────────
 const TYPE_LABELS = {
-  cc:         'Contrôle',
-  controle:   'Contrôle',
-  examen:     'Examen',
-  rattrapage: 'Rattrapage',
+  cc         : 'Devoir',
+  controle   : 'Devoir',
+  examen     : 'Examen',
+  rattrapage : 'Rattrapage',
 }
 const typeLabel = t => TYPE_LABELS[t] ?? t ?? '—'
 
-// ── Dates ─────────────────────────────────────────────────────────────
+// ── Dates ──────────────────────────────────────────────────────────────
 const fDateShort = d => d
   ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
   : '—'
@@ -274,12 +275,12 @@ const fTime = d => d
   ? new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
   : ''
 
-// ── Navigation ────────────────────────────────────────────────────────
+// ── Navigation ─────────────────────────────────────────────────────────
 function goDetail(id) {
   router.push({ name: 'student.reclamation.detail', params: { id } })
 }
 
-// ── Chargement ────────────────────────────────────────────────────────
+// ── Chargement ─────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
     const res  = await api.get('/student/reclamations')
@@ -294,27 +295,17 @@ onMounted(async () => {
 
 <style scoped>
 /* ════════════════════════════════════════════════════════════════════
-   PAGE
+   PAGE — full width, pas de max-width
 ════════════════════════════════════════════════════════════════════ */
 .reclamations-page {
-  max-width: 1100px;
+  width: 100%;
 }
 
-.page-title {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-  line-height: 1.2;
-}
 .page-subtitle {
   font-size: 0.85rem;
   color: #6B7280;
   margin: 4px 0 0;
 }
-
-/* Mode sombre */
-:deep(.v-theme--dark) .page-title { color: #F1F5F9; }
 :deep(.v-theme--dark) .page-subtitle { color: #94A3B8; }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -368,7 +359,7 @@ onMounted(async () => {
 }
 
 .filter-count {
-  background: rgba(0,0,0,0.1);
+  background: rgba(0, 0, 0, 0.10);
   border-radius: 10px;
   font-size: 11px;
   font-weight: 700;
@@ -377,7 +368,7 @@ onMounted(async () => {
   text-align: center;
 }
 .filter-btn.active .filter-count {
-  background: rgba(255,255,255,0.25);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* Mode sombre — filtres */
@@ -411,7 +402,6 @@ onMounted(async () => {
   border-radius: 16px;
   text-align: center;
 }
-
 :deep(.v-theme--dark) .state-box {
   background: #1E293B;
   border-color: #334155;
@@ -426,9 +416,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
 }
-:deep(.v-theme--dark) .empty-icon-wrapper {
-  background: #334155;
-}
+:deep(.v-theme--dark) .empty-icon-wrapper { background: #334155; }
 
 .state-title {
   font-size: 1rem;
@@ -451,6 +439,7 @@ onMounted(async () => {
   border: 1px solid #E5E7EB;
   border-radius: 16px;
   overflow: hidden;
+  width: 100%;
 }
 :deep(.v-theme--dark) .table-card {
   background: #1E293B;
@@ -460,7 +449,7 @@ onMounted(async () => {
 /* ── En-tête tableau ── */
 .tbl-head {
   display: grid;
-  grid-template-columns: 150px 1fr 100px 120px 120px 40px;
+  grid-template-columns: 160px 1fr 110px 140px 130px 44px;
   padding: 12px 20px;
   background: #F9FAFB;
   border-bottom: 1px solid #E5E7EB;
@@ -479,7 +468,7 @@ onMounted(async () => {
 /* ── Lignes ── */
 .tbl-row {
   display: grid;
-  grid-template-columns: 150px 1fr 100px 120px 120px 40px;
+  grid-template-columns: 160px 1fr 110px 140px 130px 44px;
   padding: 14px 20px;
   border-bottom: 1px solid #F3F4F6;
   align-items: center;
@@ -497,9 +486,7 @@ onMounted(async () => {
   border-color: #1E293B;
   color: #CBD5E1;
 }
-:deep(.v-theme--dark) .tbl-row:hover {
-  background: #1D3461;
-}
+:deep(.v-theme--dark) .tbl-row:hover { background: #1D3461; }
 
 /* ── Colonnes ── */
 .col-ref    { display: flex; align-items: center; }
@@ -535,15 +522,8 @@ onMounted(async () => {
 }
 :deep(.v-theme--dark) .module-name { color: #CBD5E1; }
 
-.date-main {
-  font-size: 12.5px;
-  color: #374151;
-  font-weight: 500;
-}
-.date-time {
-  font-size: 11px;
-  color: #9CA3AF;
-}
+.date-main { font-size: 12.5px; color: #374151; font-weight: 500; }
+.date-time { font-size: 11px; color: #9CA3AF; }
 :deep(.v-theme--dark) .date-main { color: #CBD5E1; }
 
 /* ── Chip type ── */
@@ -555,31 +535,14 @@ onMounted(async () => {
   display: inline-block;
   white-space: nowrap;
 }
-.type-cc, .type-controle {
-  background: #EFF6FF;
-  color: #2563EB;
-}
-.type-examen {
-  background: #FEF3C7;
-  color: #D97706;
-}
-.type-rattrapage {
-  background: #F5F3FF;
-  color: #7C3AED;
-}
+.type-cc, .type-controle { background: #EFF6FF; color: #2563EB; }
+.type-examen              { background: #FEF3C7; color: #D97706; }
+.type-rattrapage          { background: #F5F3FF; color: #7C3AED; }
+
 :deep(.v-theme--dark) .type-cc,
-:deep(.v-theme--dark) .type-controle {
-  background: rgba(37,99,235,0.2);
-  color: #93C5FD;
-}
-:deep(.v-theme--dark) .type-examen {
-  background: rgba(217,119,6,0.2);
-  color: #FCD34D;
-}
-:deep(.v-theme--dark) .type-rattrapage {
-  background: rgba(124,58,237,0.2);
-  color: #C4B5FD;
-}
+:deep(.v-theme--dark) .type-controle { background: rgba(37,99,235,0.2);  color: #93C5FD; }
+:deep(.v-theme--dark) .type-examen   { background: rgba(217,119,6,0.2);  color: #FCD34D; }
+:deep(.v-theme--dark) .type-rattrapage{ background: rgba(124,58,237,0.2); color: #C4B5FD; }
 
 /* ── Chip statut ── */
 .status-chip {
@@ -592,7 +555,6 @@ onMounted(async () => {
   border-radius: 20px;
   white-space: nowrap;
 }
-
 .status-dot {
   width: 6px;
   height: 6px;
@@ -600,39 +562,38 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-/* Statuts */
-.status-submitted  { background: #EFF6FF; color: #2563EB; }
-.status-submitted  .status-dot { background: #2563EB; }
+.status-submitted { background: #EFF6FF; color: #2563EB; }
+.status-submitted .status-dot { background: #2563EB; }
 
-.status-received   { background: #ECFDF5; color: #059669; }
-.status-received   .status-dot { background: #059669; }
+.status-received  { background: #ECFDF5; color: #059669; }
+.status-received  .status-dot { background: #059669; }
 
-.status-in_review  { background: #FFFBEB; color: #D97706; }
-.status-in_review  .status-dot { background: #D97706; }
+.status-in_review { background: #FFFBEB; color: #D97706; }
+.status-in_review .status-dot { background: #D97706; }
 
-.status-escalated  { background: #FFF7ED; color: #EA580C; }
-.status-escalated  .status-dot { background: #EA580C; }
+.status-escalated { background: #FFF7ED; color: #EA580C; }
+.status-escalated .status-dot { background: #EA580C; }
 
-.status-resolved   { background: #ECFDF5; color: #16A34A; }
-.status-resolved   .status-dot { background: #16A34A; }
+.status-resolved  { background: #ECFDF5; color: #16A34A; }
+.status-resolved  .status-dot { background: #16A34A; }
 
-.status-rejected   { background: #FEF2F2; color: #DC2626; }
-.status-rejected   .status-dot { background: #DC2626; }
+.status-rejected  { background: #FEF2F2; color: #DC2626; }
+.status-rejected  .status-dot { background: #DC2626; }
 
-.status-closed     { background: #F3F4F6; color: #6B7280; }
-.status-closed     .status-dot { background: #9CA3AF; }
+.status-closed    { background: #F3F4F6; color: #6B7280; }
+.status-closed    .status-dot { background: #9CA3AF; }
 
-.status-cancelled  { background: #F3F4F6; color: #6B7280; }
-.status-cancelled  .status-dot { background: #9CA3AF; }
+.status-cancelled { background: #F3F4F6; color: #6B7280; }
+.status-cancelled .status-dot { background: #9CA3AF; }
 
 /* Mode sombre — statuts */
-:deep(.v-theme--dark) .status-submitted  { background: rgba(37,99,235,0.2);  color: #93C5FD; }
-:deep(.v-theme--dark) .status-received   { background: rgba(5,150,105,0.2);  color: #6EE7B7; }
-:deep(.v-theme--dark) .status-in_review  { background: rgba(217,119,6,0.2);  color: #FCD34D; }
-:deep(.v-theme--dark) .status-escalated  { background: rgba(234,88,12,0.2);  color: #FCA38E; }
-:deep(.v-theme--dark) .status-resolved   { background: rgba(22,163,74,0.2);  color: #86EFAC; }
-:deep(.v-theme--dark) .status-rejected   { background: rgba(220,38,38,0.2);  color: #FCA5A5; }
-:deep(.v-theme--dark) .status-closed     { background: rgba(107,114,128,0.2);color: #9CA3AF; }
+:deep(.v-theme--dark) .status-submitted { background: rgba(37,99,235,0.2);   color: #93C5FD; }
+:deep(.v-theme--dark) .status-received  { background: rgba(5,150,105,0.2);   color: #6EE7B7; }
+:deep(.v-theme--dark) .status-in_review { background: rgba(217,119,6,0.2);   color: #FCD34D; }
+:deep(.v-theme--dark) .status-escalated { background: rgba(234,88,12,0.2);   color: #FCA38E; }
+:deep(.v-theme--dark) .status-resolved  { background: rgba(22,163,74,0.2);   color: #86EFAC; }
+:deep(.v-theme--dark) .status-rejected  { background: rgba(220,38,38,0.2);   color: #FCA5A5; }
+:deep(.v-theme--dark) .status-closed    { background: rgba(107,114,128,0.2); color: #9CA3AF; }
 
 /* ── Flèche ── */
 .arrow-icon {
@@ -643,9 +604,7 @@ onMounted(async () => {
   color: #0F2D5E;
   transform: translateX(3px);
 }
-:deep(.v-theme--dark) .tbl-row:hover .arrow-icon {
-  color: #60A5FA;
-}
+:deep(.v-theme--dark) .tbl-row:hover .arrow-icon { color: #60A5FA; }
 
 /* ── Pied de tableau ── */
 .tbl-footer {
@@ -684,16 +643,13 @@ onMounted(async () => {
   }
   .col-module,
   .col-type { display: none; }
-
   .search-field { max-width: 100%; }
   .toolbar { flex-direction: column; align-items: stretch; }
 }
 
 @media (max-width: 480px) {
-  .page-title { font-size: 1.2rem; }
-  .tbl-head, .tbl-row {
-    grid-template-columns: 1fr 100px 32px;
-  }
+  .tbl-head,
+  .tbl-row { grid-template-columns: 1fr 100px 32px; }
   .col-date { display: none; }
 }
 </style>

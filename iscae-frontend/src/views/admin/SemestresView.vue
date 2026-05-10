@@ -4,10 +4,8 @@
     <!-- ─── En-tête ─────────────────────────────────────────────── -->
     <div class="page-header mb-6">
       <div>
-        <h1 class="page-title">Semestres &amp; Périodes</h1>
-        <p class="page-sub">
-          Gérez les semestres, les périodes de réclamation, d'examen et de rattrapage.
-        </p>
+        <h1 class="page-title">Gérez les semestres, les périodes de réclamation, d'examen et de rattrapage.</h1>
+        
       </div>
      
     </div>

@@ -3,15 +3,7 @@
 
     <!-- ═══ EN-TÊTE ══════════════════════════════════════════════════ -->
     <div class="d-flex align-center justify-space-between mb-6 flex-wrap gap-3">
-      <div>
-        <h1 style="font-size:1.5rem; font-weight:800; color:#1a237e;">
-          Notifications
-        </h1>
-        <p style="font-size:0.82rem; color:#90a4ae; margin:0;">
-          {{ unreadCount }} non lue{{ unreadCount !== 1 ? 's' : '' }}
-        </p>
-      </div>
-
+      
       <!-- Actions -->
       <div class="d-flex align-center gap-2">
         <v-btn

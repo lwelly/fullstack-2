@@ -8,7 +8,7 @@
           <v-icon>mdi-arrow-left</v-icon>
         </v-btn>
         <div>
-          <h1 class="text-h5 font-weight-bold">Nouvelle Réclamation</h1>
+          <h1 class="text-h5 font-weight-bold">Réclamation</h1>
           <p class="text-body-2 text-medium-emphasis mb-0">
             Étape {{ step }} sur 3 — {{ stepTitles[step - 1] }}
           </p>
@@ -241,49 +241,10 @@
       />
 
       <!-- Zone d'upload -->
-      <div class="text-body-2 font-weight-medium mb-2">
-        Pièce jointe
-        <span class="text-medium-emphasis font-weight-regular">
-          (optionnel — PDF, JPG, PNG, max 5 Mo)
-        </span>
-        <span v-if="errors.document" class="text-error text-caption ml-2">
-          {{ errors.document }}
-        </span>
-      </div>
-
-      <!-- Aperçu fichier sélectionné -->
-      <div v-if="docFile" class="file-preview mb-3">
-        <v-icon :color="fileIconColor(docFile)" size="32">{{ fileIcon(docFile) }}</v-icon>
-        <div class="file-preview__info">
-          <div class="file-preview__name">{{ docFile.name }}</div>
-          <div class="file-preview__size">{{ formatSize(docFile.size) }}</div>
-        </div>
-        <v-btn icon size="small" variant="text" color="error" @click="removeDoc">
-          <v-icon>mdi-close-circle</v-icon>
-        </v-btn>
-      </div>
+    
 
       <!-- Zone drag & drop -->
-      <div
-        v-else
-        class="upload-zone"
-        :class="{ 'upload-zone--dragging': isDragging }"
-        @click="fileInput?.click()"
-        @dragover.prevent="isDragging = true"
-        @dragleave.prevent="isDragging = false"
-        @drop.prevent="handleDrop"
-      >
-        <v-icon size="40" color="primary" class="mb-2">mdi-cloud-upload-outline</v-icon>
-        <div class="text-body-1 font-weight-medium">Glissez votre fichier ici</div>
-        <div class="text-body-2 text-medium-emphasis">ou cliquez pour parcourir</div>
-        <input
-          ref="fileInput"
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png"
-          class="d-none"
-          @change="handleFileSelect"
-        />
-      </div>
+     
     </v-card>
 
     <!-- ══════════════════════════════════════════════════════════
