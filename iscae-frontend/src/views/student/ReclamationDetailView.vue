@@ -477,21 +477,7 @@
           elevation="0"
           border
         >
-          <v-card-text>
-            <p class="cancel-hint">
-              Vous pouvez annuler cette réclamation tant qu'elle n'est pas en cours de traitement.
-            </p>
-            <v-btn
-              color="error"
-              variant="outlined"
-              block
-              @click="confirmCancelDialog = true"
-              :loading="cancelling"
-            >
-              <v-icon start>mdi-close-circle-outline</v-icon>
-              Annuler la réclamation
-            </v-btn>
-          </v-card-text>
+          
         </v-card>
 
         <!-- Bouton retour -->

@@ -1,5 +1,4 @@
 <?php
-// app/Http/Controllers/API/Admin/ReclamationController.php
 
 namespace App\Http\Controllers\API\Admin;
 
@@ -8,8 +7,9 @@ use App\Models\Reclamation;
 use App\Services\ReclamationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;       // ✅ Import correct
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class ReclamationController extends Controller
 {
@@ -39,9 +39,9 @@ class ReclamationController extends Controller
             $query->where(function ($q) use ($s) {
                 $q->where('reference_number', 'like', "%{$s}%")
                   ->orWhereHas('student', fn($sq) =>
-                      $sq->where('nom',       'like', "%{$s}%")
-                         ->orWhere('prenom',   'like', "%{$s}%")
-                         ->orWhere('matricule','like', "%{$s}%")
+                      $sq->where('nom',        'like', "%{$s}%")
+                         ->orWhere('prenom',    'like', "%{$s}%")
+                         ->orWhere('matricule', 'like', "%{$s}%")
                   );
             });
         }
@@ -49,7 +49,6 @@ class ReclamationController extends Controller
         $perPage      = (int) $request->input('per_page', 15);
         $reclamations = $query->orderByDesc('created_at')->paginate($perPage);
 
-        // Formater sans Resource pour éviter les erreurs
         $data = $reclamations->getCollection()->map(fn($r) => $this->formatReclamation($r));
 
         return response()->json([
@@ -90,12 +89,11 @@ class ReclamationController extends Controller
     public function updateStatus(Request $request, int $id): JsonResponse
     {
         $request->validate([
-            'status'         => 'required|string|in:received,in_review,resolved,rejected,escalated,pending,cancelled',
+            'status'         => 'required|string|in:received,in_review,resolved,rejected,escalated,pending,cancelled,submitted',
             'admin_response' => 'nullable|string|max:2000',
             'comment'        => 'nullable|string|max:2000',
         ]);
 
-        // ✅ Charger avec relations pour l'Observer
         $reclamation = Reclamation::with(['student', 'module'])->findOrFail($id);
         $oldStatus   = $reclamation->status;
         $newStatus   = $request->status;
@@ -104,12 +102,11 @@ class ReclamationController extends Controller
 
         DB::beginTransaction();
         try {
-            // ✅ Utiliser Eloquent update → déclenche ReclamationObserver::updated()
             $updateData = [
-                'status'      => $newStatus,
-                'changed_by'  => $adminId,
-                'responded_by'=> $adminId,
-                'responded_at'=> now(),
+                'status'       => $newStatus,
+                'changed_by'   => $adminId,
+                'responded_by' => $adminId,
+                'responded_at' => now(),
             ];
 
             if ($response) {
@@ -120,10 +117,8 @@ class ReclamationController extends Controller
                 $updateData['resolved_at'] = now();
             }
 
-            // ✅ Eloquent update déclenche l'Observer
             $reclamation->update($updateData);
 
-            // ── Historique ──────────────────────────────────────────
             if (DB::getSchemaBuilder()->hasTable('reclamation_history')) {
                 DB::table('reclamation_history')->insert([
                     'reclamation_id' => $reclamation->id,
@@ -158,8 +153,12 @@ class ReclamationController extends Controller
             'admin_id'       => $adminId,
         ]);
 
-        // Recharger la réclamation à jour
-        $reclamation = Reclamation::with(['student.filiere', 'student.niveau', 'module', 'semestre'])->find($id);
+        $reclamation = Reclamation::with([
+            'student.filiere',
+            'student.niveau',
+            'module',
+            'semestre',
+        ])->find($id);
 
         return response()->json([
             'success' => true,
@@ -244,9 +243,33 @@ class ReclamationController extends Controller
     // ══════════════════════════════════════════════════════════════════
     private function formatReclamation(Reclamation $r, bool $withHistory = false): array
     {
-        $student = $r->relationLoaded('student') ? $r->student : null;
-        $module  = $r->relationLoaded('module')  ? $r->module  : null;
-        $semestre= $r->relationLoaded('semestre') ? $r->semestre: null;
+        $student  = $r->relationLoaded('student')  ? $r->student  : null;
+        $module   = $r->relationLoaded('module')   ? $r->module   : null;
+        $semestre = $r->relationLoaded('semestre') ? $r->semestre : null;
+
+        // ── Filière ──────────────────────────────────────────────────
+        $filiereObj = null;
+        if ($student && $student->relationLoaded('filiere') && $student->filiere) {
+            $f = $student->filiere;
+            $filiereObj = [
+                'id'   => $f->id,
+                'nom'  => $f->nom  ?? $f->name ?? null,
+                'name' => $f->nom  ?? $f->name ?? null,
+                'code' => $f->code ?? null,
+            ];
+        }
+
+        // ── Niveau ───────────────────────────────────────────────────
+        $niveauObj = null;
+        if ($student && $student->relationLoaded('niveau') && $student->niveau) {
+            $n = $student->niveau;
+            $niveauObj = [
+                'id'    => $n->id,
+                'label' => $n->label ?? $n->name ?? $n->code ?? null,
+                'name'  => $n->label ?? $n->name ?? null,
+                'code'  => $n->code  ?? null,
+            ];
+        }
 
         $data = [
             'id'               => $r->id,
@@ -263,21 +286,22 @@ class ReclamationController extends Controller
             'created_at'       => $r->created_at,
             'updated_at'       => $r->updated_at,
 
-            // Relations
+            // ── Student ──────────────────────────────────────────────
             'student' => $student ? [
-                'id'         => $student->id,
-                'matricule'  => $student->matricule,
-                'nom'        => $student->nom,
-                'prenom'     => $student->prenom,
-                'full_name'  => trim(($student->prenom ?? '') . ' ' . ($student->nom ?? '')),
-                'email'      => $student->email,
-                'photo_url'  => $student->photo_path
-                    ? \Illuminate\Support\Facades\Storage::url($student->photo_path)
+                'id'        => $student->id,
+                'matricule' => $student->matricule,
+                'nom'       => $student->nom,
+                'prenom'    => $student->prenom,
+                'full_name' => trim(($student->prenom ?? '') . ' ' . ($student->nom ?? '')),
+                'email'     => $student->email,
+                'photo_url' => $student->photo_path
+                    ? Storage::url($student->photo_path)
                     : null,
-                'filiere'    => $student->filiere?->nom   ?? null,
-                'niveau'     => $student->niveau?->label  ?? null,
+                'filiere'   => $filiereObj,   // ✅ Objet complet
+                'niveau'    => $niveauObj,     // ✅ Objet complet
             ] : null,
 
+            // ── Module ───────────────────────────────────────────────
             'module' => $module ? [
                 'id'          => $module->id,
                 'code'        => $module->code,
@@ -285,24 +309,27 @@ class ReclamationController extends Controller
                 'coefficient' => $module->coefficient,
             ] : null,
 
+            // ── Semestre ─────────────────────────────────────────────
             'semestre' => $semestre ? [
                 'id'    => $semestre->id,
                 'code'  => $semestre->code,
                 'label' => $semestre->label,
             ] : null,
 
+            // ── Pièces jointes ───────────────────────────────────────
             'attachments' => $r->relationLoaded('attachments')
                 ? $r->attachments->map(fn($a) => [
-                    'id'       => $a->id,
-                    'filename' => $a->filename ?? $a->original_name ?? null,
-                    'url'      => $a->file_path
-                        ? \Illuminate\Support\Facades\Storage::url($a->file_path)
+                    'id'            => $a->id,
+                    'filename'      => $a->filename      ?? $a->original_name ?? null,
+                    'original_name' => $a->original_name ?? $a->filename      ?? null,
+                    'url'           => $a->file_path
+                        ? Storage::url($a->file_path)
                         : null,
                 ])->toArray()
                 : [],
         ];
 
-        // Historique (pour show uniquement)
+        // ── Historique (show uniquement) ─────────────────────────────
         if ($withHistory && $r->relationLoaded('history')) {
             $data['history'] = $r->history->map(fn($h) => [
                 'id'         => $h->id,
