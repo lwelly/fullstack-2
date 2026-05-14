@@ -52,7 +52,7 @@ class SemestreController extends Controller
             ], 404);
         }
 
-        $niveauCode = strtoupper(trim($niveau->code)); // "L1", "L2", "L3"
+        $niveauCode = strtoupper(trim($niveau->code));
 
         // Codes de semestres autorisés pour ce niveau
         $allowedCodes = self::NIVEAU_SEMESTRES[$niveauCode] ?? [];
@@ -69,7 +69,7 @@ class SemestreController extends Controller
         $semestres = DB::table('semestres')
             ->whereIn('code', $allowedCodes)
             ->where(function ($query) {
-                $query->where('is_open', true)
+                $query->where('is_open', true) // Représente le CC
                       ->orWhere('is_exam_open', true)
                       ->orWhere('is_rattrapage_open', true);
             })
@@ -78,8 +78,8 @@ class SemestreController extends Controller
             ->map(function ($s) {
                 // Calculer les types disponibles selon les ouvertures
                 $types = [];
-                if ($s->is_open)           $types[] = 'cc';
-                if ($s->is_exam_open)      $types[] = 'examen';
+                if ($s->is_open)            $types[] = 'cc';
+                if ($s->is_exam_open)       $types[] = 'examen';
                 if ($s->is_rattrapage_open) $types[] = 'rattrapage';
 
                 $s->available_types = $types;
@@ -105,7 +105,7 @@ class SemestreController extends Controller
         ]);
 
         $id = DB::table('semestres')->insertGetId(array_merge($data, [
-            'is_open'            => false,
+            'is_open'            => false, // CC fermé par défaut
             'is_exam_open'       => false,
             'is_rattrapage_open' => false,
             'created_at'         => now(),
@@ -153,10 +153,10 @@ class SemestreController extends Controller
         ]);
     }
 
-    // ── Ouvrir / Fermer réclamations CC ──────────────────────────────────────
+    // ── Ouvrir / Fermer Contrôle Continu (CC) ───────────────────────────────
     public function toggle($id): JsonResponse
     {
-        $semestre = DB::table('semestres')->find($id);
+        $semestre = DB::table('semestres')->where('id', $id)->first();
 
         if (!$semestre) {
             return response()->json([
@@ -165,23 +165,26 @@ class SemestreController extends Controller
             ], 404);
         }
 
-        $newValue = !(bool) $semestre->is_open;
+        $newState = !(bool) $semestre->is_open;
 
         DB::table('semestres')->where('id', $id)->update([
-            'is_open'    => $newValue,
+            'is_open'    => $newState,
             'updated_at' => now(),
         ]);
 
+        $semestre = DB::table('semestres')->where('id', $id)->first();
+        $msg = $newState
+            ? "Contrôle Continu du semestre {$semestre->code} ouvert."
+            : "Contrôle Continu du semestre {$semestre->code} fermé.";
+
         return response()->json([
             'success' => true,
-            'is_open' => $newValue,
-            'message' => $newValue
-                ? "Semestre {$semestre->code} ouvert aux réclamations CC."
-                : "Semestre {$semestre->code} fermé aux réclamations CC.",
+            'message' => $msg,
+            'data'    => $semestre,
         ]);
     }
 
-    // ── Ouvrir / Fermer examens ───────────────────────────────────────────────
+    // ── Ouvrir / Fermer Examens ───────────────────────────────────────────────
     public function toggleExam($id): JsonResponse
     {
         $semestre = DB::table('semestres')->where('id', $id)->first();
@@ -213,7 +216,7 @@ class SemestreController extends Controller
         ]);
     }
 
-    // ── Ouvrir / Fermer rattrapage ────────────────────────────────────────────
+    // ── Ouvrir / Fermer Rattrapage ────────────────────────────────────────────
     public function toggleRattrapage($id): JsonResponse
     {
         $semestre = DB::table('semestres')->where('id', $id)->first();

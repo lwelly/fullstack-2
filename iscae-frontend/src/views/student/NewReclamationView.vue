@@ -407,7 +407,7 @@ const NIVEAU_SEMESTRES = {
 const ALL_TYPES = [
   {
     value : 'cc',
-    label : 'Devoir / CC',
+    label : 'Devoir',
     desc  : 'Contrôle continu',
     icon  : 'mdi-pencil-circle-outline',
     color : 'blue',
