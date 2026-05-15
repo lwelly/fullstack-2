@@ -403,14 +403,7 @@
             Voulez-vous {{ toggleTarget.is_active ? 'désactiver' : 'activer' }} le compte de
             <strong>{{ toggleTarget.full_name }}</strong> ?
           </p>
-          <v-textarea
-            v-model="toggleReason"
-            label="Raison (optionnel)"
-            variant="outlined"
-            density="compact"
-            rows="2"
-            hide-details
-          />
+          
         </v-card-text>
         <v-card-actions class="pa-4 pt-0">
           <v-spacer />

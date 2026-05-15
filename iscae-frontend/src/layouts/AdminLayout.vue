@@ -209,7 +209,6 @@
           </div>
           <v-divider class="mb-1" />
           <v-list-item prepend-icon="mdi-account-circle" title="Mon profil"    to="/admin/profile"   rounded="lg" />
-          <v-list-item prepend-icon="mdi-cog"            title="Paramètres"    to="/admin/settings"  rounded="lg" />
           <v-divider class="my-1" />
           <v-list-item prepend-icon="mdi-logout" title="Se déconnecter"
                        base-color="error" rounded="lg" @click="logout" />
@@ -301,7 +300,6 @@ const navItems = [
   { to: '/admin/reclamations', label: 'Réclamations',    icon: 'mdi-file-document-multiple' },
   { to: '/admin/students',     label: 'Étudiants',       icon: 'mdi-account-group' },
   { to: '/admin/semestres',    label: 'Semestres',       icon: 'mdi-calendar-multiple' },
-  { to: '/admin/settings',     label: 'Paramètres',      icon: 'mdi-cog' },
   { to: '/admin/profile',      label: 'Mon profil',      icon: 'mdi-account-circle' },
 ]
 

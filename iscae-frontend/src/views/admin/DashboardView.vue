@@ -303,14 +303,14 @@ const kpiCards = [
     label: 'En attente',
     icon:  'mdi-clock-alert-outline',
     color: '#FF9800',
-    sub:   'submitted + received',
+    sub:   'Soumise ',
   },
   {
     key:   'in_progress',
     label: 'En traitement',
     icon:  'mdi-progress-clock',
     color: '#9C27B0',
-    sub:   'in_review + escalated',
+    sub:   'En cours  + Escalede',
   },
   {
     key:   'resolved',

@@ -4,7 +4,7 @@
     <!-- En-tête -->
     <div class="d-flex align-center justify-space-between mb-5">
       <div>
-        <h1 class="dash-title">Bonjour, {{ firstName }} 👋</h1>
+        <h1 class="dash-title">Bonjour, {{ firstName }} </h1>
         <p class="dash-sub text-capitalize">{{ today }}</p>
       </div>
       <v-btn

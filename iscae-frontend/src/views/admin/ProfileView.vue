@@ -126,7 +126,7 @@
               <span class="text-body-2 font-weight-medium">{{ profile?.role }}</span>
             </div>
             <div class="d-flex align-center justify-space-between" v-if="profile?.password_changed_at">
-              <span class="text-body-2 text-medium-emphasis">Mdp changé</span>
+              <span class="text-body-2 text-medium-emphasis">Mot de passe  changé</span>
               <span class="text-body-2">{{ fDate(profile.password_changed_at) }}</span>
             </div>
           </v-card>

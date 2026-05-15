@@ -47,13 +47,7 @@
         </div>
 
         <!-- Dates globales du semestre -->
-        <div class="card-dates">
-          <v-icon size="13" color="#6B7280">mdi-clock-outline</v-icon>
-          <span>{{ formatDate(s.open_at) }}</span>
-          <v-icon size="11" color="#D1D5DB">mdi-arrow-right-thin</v-icon>
-          <span>{{ formatDate(s.close_at) }}</span>
-        </div>
-
+        
         <v-divider class="my-3" />
 
         <!-- ── Grille des Périodes (CC, Examen, Rattrapage) ── -->
@@ -112,13 +106,7 @@
         <!-- Actions de gestion -->
         <div class="card-actions">
           <v-spacer />
-          <v-btn
-            size="small" variant="outlined" color="#0F2D5E"
-            prepend-icon="mdi-pencil"
-            @click="openEditDialog(s)"
-          >
-            Modifier
-          </v-btn>
+         
         </div>
 
       </div>

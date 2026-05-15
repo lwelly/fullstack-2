@@ -220,7 +220,7 @@
     <v-card v-if="step === 2" variant="elevated" rounded="lg" class="pa-6 mb-4">
       <div class="text-h6 font-weight-bold mb-1">Justification</div>
       <div class="text-body-2 text-medium-emphasis mb-5">
-        Expliquez clairement le motif de votre réclamation (min. 20 caractères)
+        Expliquez clairement le motif de votre réclamation.
       </div>
 
       <!-- Justification -->

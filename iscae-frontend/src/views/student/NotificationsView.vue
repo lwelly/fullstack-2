@@ -261,11 +261,7 @@ const tabs = computed(() => [
     label: 'Réclamations',
     count: notifications.value.filter(n => n.type?.includes('reclamation')).length,
   },
-  {
-    value: 'system',
-    label: 'Système',
-    count: notifications.value.filter(n => n.type?.includes('system') || n.type?.includes('general')).length,
-  },
+ 
 ])
 
 // ── Computed ────────────────────────────────────────────────────────
