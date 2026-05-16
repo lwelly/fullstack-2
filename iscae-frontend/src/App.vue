@@ -3,7 +3,10 @@
 </template>
 
 <script setup>
-import { ref, computed, provide, onMounted } from 'vue'
+import { ref, computed, provide, watch, onMounted } from 'vue'
+import { useTheme } from 'vuetify'
+
+const vuetifyTheme = useTheme()
 
 const isDark = ref(localStorage.getItem('iscae-theme') === 'dark')
 const appTheme = computed(() => isDark.value ? 'iscaeDark' : 'iscaeLight')
@@ -13,6 +16,11 @@ function toggleTheme() {
   localStorage.setItem('iscae-theme', isDark.value ? 'dark' : 'light')
   document.documentElement.style.backgroundColor = isDark.value ? '#0A0E1A' : '#F4F6FA'
 }
+
+// ✅ Synchronise Vuetify à chaque changement de isDark
+watch(isDark, val => {
+  vuetifyTheme.global.name.value = val ? 'iscaeDark' : 'iscaeLight'
+}, { immediate: true })
 
 provide('isDark', isDark)
 provide('toggleTheme', toggleTheme)

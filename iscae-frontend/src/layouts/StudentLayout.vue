@@ -1,269 +1,271 @@
 <template>
   <v-app :theme="appTheme">
 
-    <!-- ══════════════════════════════════════════════════════════════
-         SIDEBAR
-    ══════════════════════════════════════════════════════════════════ -->
+    <!-- ═══════════════════════════════════════════════════════════
+         NAVIGATION DRAWER
+    ════════════════════════════════════════════════════════════════ -->
     <v-navigation-drawer
       v-model="drawer"
-      permanent
-      width="240"
-      :class="['sidebar', { 'sidebar--dark': isDark }]"
+      :rail="rail && !mobile"
+      :temporary="mobile"
+      :width="260"
+      :rail-width="68"
+      class="student-drawer"
+      :class="{ 'drawer-dark': isDark }"
     >
-      <!-- ── Logo ─────────────────────────────────────────────────── -->
-      <div class="sidebar-logo px-5 py-5">
-        <div class="d-flex align-center" style="gap: 14px;">
-          <div class="logo-wrapper">
-            <img
-              src="https://th.bing.com/th/id/R.bb2cf5d4b7c5c26926598d033caa12d5?rik=qVW4UwQbTi2FBw&riu=http%3a%2f%2fiscae.mr%2fsites%2fdefault%2ffiles%2flogo-iscae.png&ehk=YA1xYsCRE3ywccmaupnq14KGVjvhrs1pJQdhphtJE%2bs%3d&risl=&pid=ImgRaw&r=0"
-              alt="Logo ISCAE"
-              class="logo-img"
-              draggable="false"
-            />
-          </div>
-          <div class="logo-text">
-            <div class="logo-title">ISCAE</div>
-            <div class="logo-sub">ÉTUDIANT</div>
-          </div>
+
+      <!-- ── Logo ── -->
+      <div class="drawer-logo" :class="{ 'logo-collapsed': rail && !mobile }">
+        <div class="logo-wrapper">
+          <img
+            src="https://th.bing.com/th/id/R.bb2cf5d4b7c5c26926598d033caa12d5?rik=qVW4UwQbTi2FBw&riu=http%3a%2f%2fiscae.mr%2fsites%2fdefault%2ffiles%2flogo-iscae.png&ehk=YA1xYsCRE3ywccmaupnq14KGVjvhrs1pJQdhphtJE%2bs%3d&risl=&pid=ImgRaw&r=0"
+            alt="Logo ISCAE"
+            class="logo-img"
+            draggable="false"
+          />
         </div>
+        <transition name="logo-slide">
+          <div v-if="!rail || mobile" class="logo-texts">
+            <span class="logo-app">ISCAE</span>
+            <span class="logo-sub">Espace Étudiant</span>
+          </div>
+        </transition>
       </div>
 
-      <div class="sidebar-divider" />
+      <!-- ── Label section ── -->
+      <div class="drawer-section-label" :class="{ 'label-hidden': rail && !mobile }">
+        <span>NAVIGATION</span>
+      </div>
 
-      <!-- ── Section PRINCIPAL ─────────────────────────────────────── -->
-      <div class="px-3 pt-4 pb-1">
-        <div class="nav-section-label">PRINCIPAL</div>
+      <!-- ── Nav items principal ── -->
+      <v-list density="compact" nav class="nav-list px-2">
         <router-link
           v-for="item in mainNavItems"
           :key="item.name"
           :to="item.to"
-          class="nav-link"
-          :class="{ active: isActive(item) }"
+          class="nav-item-link"
+          :class="{ 'link-active': isActive(item) }"
+          :title="rail && !mobile ? item.title : undefined"
         >
-          <div class="nav-icon-wrapper">
-            <v-icon size="18">{{ item.icon }}</v-icon>
+          <div class="nav-item-inner">
+            <div class="nav-icon-wrap" :class="{ 'icon-active': isActive(item) }">
+              <v-icon size="18">{{ item.icon }}</v-icon>
+            </div>
+            <transition name="label-fade">
+              <span v-if="!rail || mobile" class="nav-label">{{ item.title }}</span>
+            </transition>
           </div>
-          <span class="nav-label">{{ item.title }}</span>
-          <span v-if="item.badge && unread > 0" class="nav-badge">
-            {{ unread > 99 ? '99+' : unread }}
-          </span>
+          <transition name="label-fade">
+            <v-badge
+              v-if="item.badge && unread > 0 && (!rail || mobile)"
+              :content="unread > 99 ? '99+' : unread"
+              color="error"
+              inline
+            />
+          </transition>
         </router-link>
+      </v-list>
+
+      <!-- ── Label section COMPTE ── -->
+      <div class="drawer-section-label mt-2" :class="{ 'label-hidden': rail && !mobile }">
+        <span>COMPTE</span>
       </div>
 
-      <div class="sidebar-divider mt-2" />
-
-      <!-- ── Section COMPTE ────────────────────────────────────────── -->
-      <div class="px-3 pt-3 pb-1">
-        <div class="nav-section-label">COMPTE</div>
+      <!-- ── Nav items compte ── -->
+      <v-list density="compact" nav class="nav-list px-2">
         <router-link
           v-for="item in accountNavItems"
           :key="item.name"
           :to="item.to"
-          class="nav-link"
-          :class="{ active: isActive(item) }"
+          class="nav-item-link"
+          :class="{ 'link-active': isActive(item) }"
+          :title="rail && !mobile ? item.title : undefined"
         >
-          <div class="nav-icon-wrapper">
-            <v-icon size="18">{{ item.icon }}</v-icon>
+          <div class="nav-item-inner">
+            <div class="nav-icon-wrap" :class="{ 'icon-active': isActive(item) }">
+              <v-icon size="18">{{ item.icon }}</v-icon>
+            </div>
+            <transition name="label-fade">
+              <span v-if="!rail || mobile" class="nav-label">{{ item.title }}</span>
+            </transition>
           </div>
-          <span class="nav-label">{{ item.title }}</span>
         </router-link>
+      </v-list>
+
+      <!-- ── Footer drawer ── -->
+      <template #append>
+        
+      </template>
+
+    </v-navigation-drawer>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         APP BAR
+    ════════════════════════════════════════════════════════════════ -->
+    <v-app-bar
+      :color="isDark ? '#1E1E2E' : 'white'"
+      elevation="0"
+      class="student-appbar"
+      :class="{ 'appbar-dark': isDark }"
+    >
+      <!-- Toggle sidebar -->
+      <v-btn
+        :icon="rail && !mobile ? 'mdi-menu-open' : 'mdi-menu'"
+        variant="text"
+        :color="isDark ? '#A9B1D6' : '#0F2D5E'"
+        class="ml-1"
+        @click="toggleSidebar"
+      />
+
+      <!-- Breadcrumb / titre -->
+      <div class="appbar-breadcrumb ml-2">
+        <span class="appbar-section">Étudiant</span>
+        <v-icon size="14" :color="isDark ? '#565F89' : '#CBD5E1'" class="mx-1">mdi-chevron-right</v-icon>
+        <span class="appbar-page" :class="{ 'page-dark': isDark }">{{ currentPageTitle }}</span>
       </div>
 
-      <!-- ── Footer utilisateur ───────────────────────────────────── -->
-      <template #append>
-        <div class="sidebar-divider" />
-        <div class="sidebar-footer px-4 py-3">
-          <div class="d-flex align-center" style="gap: 10px;">
-            <v-avatar size="34" class="user-avatar flex-shrink-0">
+      <v-spacer />
+
+      <!-- Toggle thème -->
+      <v-tooltip :text="isDark ? 'Mode clair' : 'Mode sombre'" location="bottom">
+        <template #activator="{ props }">
+          <v-btn v-bind="props" variant="text" icon class="mr-1" @click="toggleTheme">
+            <v-icon :color="isDark ? '#FCD34D' : '#475569'">
+              {{ isDark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}
+            </v-icon>
+          </v-btn>
+        </template>
+      </v-tooltip>
+
+      <!-- Cloche notifications -->
+      <v-btn
+        icon
+        variant="text"
+        size="small"
+        class="mr-1"
+        :to="{ name: 'student.notifications' }"
+      >
+        <v-badge
+          v-if="unread > 0"
+          :content="unread > 99 ? '99+' : unread"
+          color="error"
+        >
+          <v-icon size="20" :color="isDark ? '#D1D5DB' : '#475569'">mdi-bell-outline</v-icon>
+        </v-badge>
+        <v-icon v-else size="20" :color="isDark ? '#D1D5DB' : '#475569'">mdi-bell-outline</v-icon>
+      </v-btn>
+
+      <!-- Menu étudiant -->
+      <v-menu min-width="210" :theme="appTheme">
+        <template #activator="{ props }">
+          <v-btn v-bind="props" variant="text" rounded="lg" class="mr-2 pa-1 user-btn">
+            <v-avatar color="blue-darken-2" size="32">
               <img
                 v-if="user?.photo_url"
                 :src="user.photo_url"
-                :alt="user.name"
                 style="width:100%;height:100%;object-fit:cover;border-radius:50%"
               />
-              <span v-else class="avatar-initials">{{ initials }}</span>
+              <span v-else class="text-caption font-weight-bold text-white">{{ initials }}</span>
             </v-avatar>
-            <div style="flex:1; min-width:0;">
-              <div class="user-name text-truncate">{{ user?.name ?? 'Étudiant' }}</div>
-              <div class="user-role">Étudiant</div>
+            <span v-if="!mobile" class="ml-2 user-btn-name" :class="{ 'name-dark': isDark }">
+              {{ firstName }}
+            </span>
+            <v-icon size="16" class="ml-1" :color="isDark ? '#565F89' : '#CBD5E1'">mdi-chevron-down</v-icon>
+          </v-btn>
+        </template>
+
+        <v-list density="compact" rounded="xl" elevation="8" class="user-menu" :class="{ 'menu-dark': isDark }">
+          <!-- Header user -->
+          <div class="user-menu-header">
+            <v-avatar color="blue-darken-2" size="42">
+              <img
+                v-if="user?.photo_url"
+                :src="user.photo_url"
+                style="width:100%;height:100%;object-fit:cover;border-radius:50%"
+              />
+              <span v-else class="text-body-2 font-weight-bold text-white">{{ initials }}</span>
+            </v-avatar>
+            <div class="user-menu-info">
+              <div class="user-menu-name">{{ user?.name ?? 'Étudiant' }}</div>
+              <div class="user-menu-role">{{ user?.email ?? 'Étudiant' }}</div>
             </div>
-            <v-btn
-              icon
-              size="x-small"
-              variant="text"
-              class="logout-btn"
-              title="Déconnexion"
-              @click="logout"
-            >
-              <v-icon size="17">mdi-logout</v-icon>
-            </v-btn>
           </div>
-        </div>
-      </template>
-    </v-navigation-drawer>
-
-    <!-- ══════════════════════════════════════════════════════════════
-         HEADER
-    ══════════════════════════════════════════════════════════════════ -->
-    <v-app-bar
-      flat
-      height="60"
-      :class="['app-header', { 'app-header--dark': isDark }]"
-    >
-      <v-app-bar-nav-icon
-        class="d-md-none"
-        :color="isDark ? 'white' : '#374151'"
-        @click="drawer = !drawer"
-      />
-
-      <v-app-bar-title>
-        <span :class="['page-title', { 'page-title--dark': isDark }]">
-          {{ pageTitle }}
-        </span>
-      </v-app-bar-title>
-
-      <template #append>
-        <!-- Toggle thème -->
-        <v-btn
-          icon
-          variant="text"
-          size="small"
-          class="mr-1"
-          :title="isDark ? 'Mode clair' : 'Mode sombre'"
-          @click="toggleThemeGlobal"
-        >
-          <v-icon size="20" :color="isDark ? '#FCD34D' : '#6B7280'">
-            {{ isDark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}
-          </v-icon>
-        </v-btn>
-
-        <!-- Cloche notifications -->
-        <v-btn
-          icon
-          variant="text"
-          size="small"
-          class="mr-1"
-          :to="{ name: 'student.notifications' }"
-        >
-          <v-badge
-            v-if="unread > 0"
-            :content="unread > 99 ? '99+' : unread"
-            color="error"
-          >
-            <v-icon size="20" :color="isDark ? '#D1D5DB' : '#6B7280'">
-              mdi-bell-outline
-            </v-icon>
-          </v-badge>
-          <v-icon v-else size="20" :color="isDark ? '#D1D5DB' : '#6B7280'">
-            mdi-bell-outline
-          </v-icon>
-        </v-btn>
-
-        <!-- Email -->
-        <div
-          v-if="user?.email"
-          :class="['header-email mr-2', { 'header-email--dark': isDark }]"
-        >
-          {{ user.email }}
-        </div>
-
-        <!-- Avatar -->
-        <v-avatar
-          size="36"
-          class="mr-3 header-avatar"
-          style="cursor:pointer"
-          @click="router.push({ name: 'student.profile' })"
-        >
-          <img
-            v-if="user?.photo_url"
-            :src="user.photo_url"
-            style="width:100%;height:100%;object-fit:cover;border-radius:50%"
-          />
-          <span v-else class="avatar-initials-header">{{ initials }}</span>
-        </v-avatar>
-      </template>
+          <v-divider class="mb-1" />
+          <v-list-item prepend-icon="mdi-account-circle" title="Mon profil" :to="{ name: 'student.profile' }" rounded="lg" />
+          <v-divider class="my-1" />
+          <v-list-item prepend-icon="mdi-logout" title="Se déconnecter"
+                       base-color="error" rounded="lg" @click="logout" />
+        </v-list>
+      </v-menu>
     </v-app-bar>
 
-    <!-- ══════════════════════════════════════════════════════════════
-         CONTENU PRINCIPAL
-    ══════════════════════════════════════════════════════════════════ -->
-    <v-main :class="['main-content', { 'main-content--dark': isDark }]">
-      <v-container fluid class="pa-6">
+    <!-- ═══════════════════════════════════════════════════════════
+         MAIN CONTENT
+    ════════════════════════════════════════════════════════════════ -->
+    <v-main class="student-main" :class="{ 'main-dark': isDark }">
+      <div class="page-wrapper">
         <router-view />
-      </v-container>
+      </div>
     </v-main>
 
   </v-app>
 </template>
 
 <script setup>
-import { ref, computed, inject, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter }                           from 'vue-router'
-import { useAuthStore }                                  from '@/stores/auth'
-import { useToast }                                      from 'vue-toastification'
-import api                                               from '@/api/axios'
+import { ref, computed, watch, inject, onMounted, onUnmounted } from 'vue'
+import { useDisplay } from 'vuetify'
+import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useToast } from 'vue-toastification'
+import api from '@/api/axios'
 
-const route     = useRoute()
 const router    = useRouter()
+const route     = useRoute()
 const authStore = useAuthStore()
 const toast     = useToast()
+const { mobile } = useDisplay()
 
-const isDark            = inject('isDark')
-const toggleThemeGlobal = inject('toggleTheme')
-const appTheme          = inject('appTheme')
+/* ── État ── */
+const drawer = ref(true)
+const rail   = ref(false)
+const unread = ref(0)
+let    notifTimer = null
 
-const drawer     = ref(true)
-const unread     = ref(0)
-let   notifTimer = null
+/* ── Thème — injecté depuis App.vue ── */
+const isDark      = inject('isDark')       // ref<boolean>
+const toggleTheme = inject('toggleTheme') // function
+const appTheme    = inject('appTheme')    // computed<'iscaeLight'|'iscaeDark'>
 
-const user = computed(() => authStore.user)
+/* ── Sidebar ── */
+function toggleSidebar() {
+  if (mobile.value) {
+    drawer.value = !drawer.value
+  } else {
+    rail.value = !rail.value
+  }
+}
 
-const initials = computed(() => {
+/* ── User ── */
+const user      = computed(() => authStore.user ?? {})
+const firstName = computed(() => (user.value?.name ?? 'Étudiant').split(' ')[0])
+const initials  = computed(() => {
   const name = user.value?.name ?? user.value?.email ?? 'ET'
-  return name
-    .split(' ')
-    .map(n => n[0] ?? '')
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || 'ET'
+  const parts = name.trim().split(' ').filter(Boolean)
+  return parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.substring(0, 2).toUpperCase()
 })
 
-// ── Navigation ────────────────────────────────────────────────────────
+/* ── Navigation ── */
 const mainNavItems = [
-  {
-    title : 'Tableau de bord',
-    icon  : 'mdi-view-dashboard-outline',
-    name  : 'student.dashboard',
-    to    : { name: 'student.dashboard' },
-  },
-  {
-    title : 'Mes Réclamations',
-    icon  : 'mdi-message-alert-outline',
-    name  : 'student.reclamations',
-    to    : { name: 'student.reclamations' },
-  },
-  {
-    title : 'Nouvelle Réclamation',
-    icon  : 'mdi-plus-circle-outline',
-    name  : 'student.reclamations.new',
-    to    : { name: 'student.reclamations.new' },
-  },
-  {
-    title : 'Notifications',
-    icon  : 'mdi-bell-outline',
-    name  : 'student.notifications',
-    to    : { name: 'student.notifications' },
-    badge : true,
-  },
+  { title: 'Tableau de bord',    icon: 'mdi-view-dashboard',          name: 'student.dashboard',        to: { name: 'student.dashboard' } },
+  { title: 'Mes Réclamations',   icon: 'mdi-file-document-multiple',  name: 'student.reclamations',     to: { name: 'student.reclamations' } },
+  { title: 'Nouvelle Réclamation', icon: 'mdi-plus-circle-outline',   name: 'student.reclamations.new', to: { name: 'student.reclamations.new' } },
+  { title: 'Notifications',      icon: 'mdi-bell-outline',            name: 'student.notifications',    to: { name: 'student.notifications' }, badge: true },
 ]
 
 const accountNavItems = [
-  {
-    title : 'Mon Profil',
-    icon  : 'mdi-account-circle-outline',
-    name  : 'student.profile',
-    to    : { name: 'student.profile' },
-  },
+  { title: 'Mon Profil', icon: 'mdi-account-circle', name: 'student.profile', to: { name: 'student.profile' } },
 ]
 
 const titleMap = {
@@ -274,158 +276,179 @@ const titleMap = {
   'student.notifications'      : 'Notifications',
   'student.profile'            : 'Mon Profil',
 }
-const pageTitle = computed(() => titleMap[route.name] ?? 'Espace Étudiant')
+
+const currentPageTitle = computed(() => titleMap[route.name] ?? 'Espace Étudiant')
 
 function isActive(item) {
   if (route.name === item.name) return true
-  if (item.name === 'student.reclamations' &&
-      route.name === 'student.reclamation.detail') return true
+  if (item.name === 'student.reclamations' && route.name === 'student.reclamation.detail') return true
   return false
 }
 
+/* ── Notifications ── */
+async function fetchUnread() {
+  try {
+    const res = await api.get('/student/notifications/counts')
+    unread.value = res.data?.data?.unread ?? 0
+  } catch {
+    unread.value = 0
+  }
+}
+
+/* ── Logout ── */
 async function logout() {
   try   { await authStore.logout(); toast.success('Déconnexion réussie.') }
   catch { /* ignore */ }
   finally { router.push({ name: 'login' }) }
 }
 
-async function fetchUnread() {
-  try   { const res = await api.get('/student/notifications/counts'); unread.value = res.data?.data?.unread ?? 0 }
-  catch { unread.value = 0 }
-}
+/* ── Lifecycle ── */
+onMounted(() => {
+  fetchUnread()
+  notifTimer = setInterval(fetchUnread, 60_000)
+  if (mobile.value) drawer.value = false
+})
 
-onMounted(() => { fetchUnread(); notifTimer = setInterval(fetchUnread, 60_000) })
-onUnmounted(() => { if (notifTimer) clearInterval(notifTimer) })
+onUnmounted(() => {
+  if (notifTimer) clearInterval(notifTimer)
+})
+
+watch(mobile, v => {
+  if (v) { drawer.value = false; rail.value = false }
+  else   { drawer.value = true }
+})
 </script>
 
 <style scoped>
-/* ════════════════════════════════════════════════════════════════════
-   SIDEBAR
-════════════════════════════════════════════════════════════════════ */
-.sidebar {
+/* ════════════════════════════════════════════════════════════════
+   DRAWER — Mode clair
+════════════════════════════════════════════════════════════════ */
+.student-drawer {
   background: #0F2D5E !important;
-  border: none !important;
-  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.18) !important;
-}
-.sidebar--dark {
-  background: #0a1f42 !important;
-  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.45) !important;
+  border-right: none !important;
+  box-shadow: 4px 0 24px rgba(15, 45, 94, .18) !important;
 }
 
-/* ── Logo zone ── */
-.sidebar-logo {
-  background: rgba(0, 0, 0, 0.18);
-  min-height: 76px;
+/* ── Logo ── */
+.drawer-logo {
   display: flex;
   align-items: center;
+  gap: 10px;
+  padding: 22px 16px 18px;
+  transition: padding .25s;
 }
-
-/* ── Cercle blanc du logo ── */
+.logo-collapsed {
+  justify-content: center;
+  padding: 22px 8px 18px;
+}
 .logo-wrapper {
   flex-shrink: 0;
-  width: 52px;
-  height: 52px;
+  width: 46px !important;
+  height: 46px !important;
+  min-width: 46px !important;
+  min-height: 46px !important;
   border-radius: 50%;
   background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  box-shadow:
-    0 0 0 3px rgba(255, 255, 255, 0.20),
-    0 4px 18px rgba(0, 0, 0, 0.40);
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.25), 0 4px 16px rgba(0,0,0,0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .logo-wrapper:hover {
-  transform: scale(1.07);
-  box-shadow:
-    0 0 0 4px rgba(255, 255, 255, 0.38),
-    0 6px 24px rgba(0, 0, 0, 0.50);
+  transform: scale(1.06);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.45), 0 6px 22px rgba(0,0,0,0.45);
 }
-
-/* ── Image logo ── */
 .logo-img {
-  width: 44px;
-  height: 44px;
+  width: 42px !important;
+  height: 42px !important;
+  max-width: 42px !important;
+  max-height: 42px !important;
   object-fit: contain;
+  border-radius: 50%;
   display: block;
   pointer-events: none;
   user-select: none;
 }
-
-/* ── Texte logo ── */
-.logo-text {
-  margin-left: 2px;
+.logo-texts {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.logo-title {
-  font-size: 17px;
+.logo-app {
+  font-size: .95rem;
   font-weight: 800;
-  color: #ffffff;
-  line-height: 1.15;
-  letter-spacing: 0.6px;
+  color: #fff;
+  letter-spacing: .08em;
+  line-height: 1.1;
 }
 .logo-sub {
-  font-size: 9px;
-  color: rgba(255, 255, 255, 0.42);
-  letter-spacing: 2.2px;
-  text-transform: uppercase;
-  margin-top: 2px;
+  font-size: .68rem;
+  color: rgba(255,255,255,.55);
+  letter-spacing: .04em;
+  margin-top: 1px;
 }
 
-/* ── Séparateur ── */
-.sidebar-divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-/* ── Label de section ── */
-.nav-section-label {
-  font-size: 9.5px;
+/* ── Label section ── */
+.drawer-section-label {
+  padding: 4px 18px 6px;
+  font-size: .62rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.28);
-  letter-spacing: 1.6px;
+  color: rgba(255,255,255,.35);
+  letter-spacing: .1em;
   text-transform: uppercase;
-  padding: 0 10px 7px 10px;
+  transition: opacity .2s;
 }
+.label-hidden { opacity: 0; pointer-events: none; height: 0; padding: 0; overflow: hidden; }
 
-/* ── Liens nav ── */
-.nav-link {
+/* ── Nav list ── */
+.nav-list { padding-top: 0 !important; }
+
+.nav-item-link {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
+  justify-content: space-between;
+  padding: 0 8px;
+  height: 44px;
   border-radius: 10px;
-  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 3px;
   text-decoration: none;
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 2px;
-  transition: background 0.15s, color 0.15s, transform 0.12s;
+  cursor: pointer;
+  transition: background .15s;
+  color: rgba(255,255,255,.7);
   position: relative;
 }
-.nav-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.92);
-  transform: translateX(2px);
+.nav-item-link:hover {
+  background: rgba(255,255,255,.1);
+  color: #fff;
 }
-.nav-link.active {
-  background: rgba(37, 99, 235, 0.35);
-  color: #ffffff;
-  font-weight: 600;
+.nav-item-link.link-active {
+  background: rgba(255,255,255,.16);
+  color: #fff;
 }
-.nav-link.active::before {
+.nav-item-link.link-active::before {
   content: '';
   position: absolute;
   left: 0;
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
-  height: 60%;
-  background: #3B82F6;
+  height: 20px;
+  background: #fff;
   border-radius: 0 3px 3px 0;
 }
 
-.nav-icon-wrapper {
+/* Inner row */
+.nav-item-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* Icon wrap */
+.nav-icon-wrap {
   width: 32px;
   height: 32px;
   border-radius: 8px;
@@ -433,100 +456,135 @@ onUnmounted(() => { if (notifTimer) clearInterval(notifTimer) })
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.06);
-  transition: background 0.15s;
+  background: transparent;
+  transition: background .15s;
+  color: rgba(255,255,255,.7);
 }
-.nav-link.active  .nav-icon-wrapper { background: rgba(59, 130, 246, 0.30); }
-.nav-link:hover   .nav-icon-wrapper { background: rgba(255, 255, 255, 0.12); }
-
-.nav-label { flex: 1; }
-
-.nav-badge {
-  background: #DC2626;
+.nav-item-link:hover .nav-icon-wrap { background: rgba(255,255,255,.12); color: #fff; }
+.nav-icon-wrap.icon-active {
+  background: rgba(255,255,255,.2);
   color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 10px;
-  min-width: 18px;
-  text-align: center;
-  line-height: 1.4;
 }
 
-/* ── Footer ── */
-.sidebar-footer  { background: rgba(0, 0, 0, 0.22); }
-
-.user-avatar {
-  background: linear-gradient(135deg, #2563EB, #1D4ED8) !important;
-}
-.avatar-initials {
-  font-size: 12px;
-  font-weight: 700;
-  color: white;
-}
-.user-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.90);
-  line-height: 1.2;
-  max-width: 120px;
-}
-.user-role {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.38);
-  margin-top: 1px;
-}
-.logout-btn       { color: rgba(255, 255, 255, 0.38) !important; transition: color 0.15s; }
-.logout-btn:hover { color: #F87171 !important; }
-
-/* ════════════════════════════════════════════════════════════════════
-   HEADER
-════════════════════════════════════════════════════════════════════ */
-.app-header {
-  background: #ffffff !important;
-  border-bottom: 1px solid #E5E7EB !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06) !important;
-}
-.app-header--dark {
-  background: #1E293B !important;
-  border-bottom: 1px solid #334155 !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.30) !important;
-}
-
-.page-title       { font-size: 15px; font-weight: 700; color: #111827; }
-.page-title--dark { color: #F1F5F9; }
-
-.header-email {
-  font-size: 12px;
+/* Label */
+.nav-label {
+  font-size: .875rem;
   font-weight: 500;
-  color: #6B7280;
-  max-width: 180px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: inherit;
+}
+.link-active .nav-label { font-weight: 600; }
+
+/* Divider + footer */
+.drawer-divider { height: 1px; background: rgba(255,255,255,.1); margin: 0 16px 8px; }
+.drawer-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 20px;
+}
+.footer-collapsed { justify-content: center; padding: 12px 8px 20px; }
+.footer-info { display: flex; flex-direction: column; overflow: hidden; }
+.footer-name {
+  font-size: .82rem;
+  font-weight: 600;
+  color: rgba(255,255,255,.9);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.header-email--dark { color: #9CA3AF; }
+.footer-role { font-size: .68rem; color: rgba(255,255,255,.5); margin-top: 1px; }
+.avatar-student { border: 2px solid rgba(255,255,255,.25); }
 
-.header-avatar {
-  background: linear-gradient(135deg, #0F2D5E, #1D4ED8) !important;
-}
-.avatar-initials-header {
-  font-size: 13px;
-  font-weight: 700;
-  color: white;
+/* ════════════════════════════════════════════════════════════════
+   DRAWER — Mode sombre
+════════════════════════════════════════════════════════════════ */
+.drawer-dark {
+  background: #16213E !important;
+  box-shadow: 4px 0 24px rgba(0,0,0,.4) !important;
 }
 
-/* ════════════════════════════════════════════════════════════════════
-   CONTENU
-════════════════════════════════════════════════════════════════════ */
-.main-content       { background: #F3F4F6 !important; transition: background 0.3s; }
-.main-content--dark { background: #0F172A !important; }
-
-/* ════════════════════════════════════════════════════════════════════
-   RESPONSIVE
-════════════════════════════════════════════════════════════════════ */
-@media (max-width: 960px) {
-  .sidebar       { position: fixed !important; z-index: 1000 !important; }
-  .header-email  { display: none; }
+/* ════════════════════════════════════════════════════════════════
+   APP BAR
+════════════════════════════════════════════════════════════════ */
+.student-appbar {
+  border-bottom: 1px solid #E2E8F0 !important;
 }
+.appbar-dark {
+  border-bottom-color: #2D3748 !important;
+}
+
+.appbar-breadcrumb { display: flex; align-items: center; }
+.appbar-section    { font-size: .8rem; color: #94A3B8; font-weight: 500; }
+.appbar-page       { font-size: .875rem; font-weight: 700; color: #0F172A; }
+.page-dark         { color: #E2E8F0 !important; }
+
+/* User btn */
+.user-btn      { text-transform: none !important; }
+.user-btn-name { font-size: .85rem; font-weight: 600; color: #334155; }
+.name-dark     { color: #CBD5E1 !important; }
+
+/* User menu */
+.user-menu {
+  border-radius: 16px !important;
+  border: 1px solid #E2E8F0;
+  overflow: hidden;
+}
+.menu-dark { border-color: #2D3748 !important; }
+.user-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+.user-menu-name { font-size: .9rem; font-weight: 700; color: #1E293B; }
+.user-menu-role { font-size: .75rem; color: #64748B; }
+
+/* ════════════════════════════════════════════════════════════════
+   MAIN
+════════════════════════════════════════════════════════════════ */
+.student-main {
+  background: #F8FAFC !important;
+  min-height: 100vh;
+  transition: background .25s;
+}
+.main-dark {
+  background: #0F0F1A !important;
+}
+.page-wrapper {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TRANSITIONS
+════════════════════════════════════════════════════════════════ */
+.logo-slide-enter-active,
+.logo-slide-leave-active { transition: opacity .2s, transform .2s; }
+.logo-slide-enter-from,
+.logo-slide-leave-to     { opacity: 0; transform: translateX(-8px); }
+
+.label-fade-enter-active,
+.label-fade-leave-active { transition: opacity .15s; }
+.label-fade-enter-from,
+.label-fade-leave-to     { opacity: 0; }
+
+/* ════════════════════════════════════════════════════════════════
+   DARK MODE — overrides globaux
+════════════════════════════════════════════════════════════════ */
+:global(.v-theme--dark .v-card)    { background: #1A1A2E !important; border-color: #2D3748 !important; }
+:global(.v-theme--dark .v-card-title),
+:global(.v-theme--dark .v-list-item-title) { color: #E2E8F0 !important; }
+:global(.v-theme--dark .text-medium-emphasis) { color: #94A3B8 !important; }
+:global(.v-theme--dark .v-field) { background: #2D3748 !important; }
+:global(.v-theme--dark .v-field__input) { color: #E2E8F0 !important; }
+:global(.v-theme--dark .v-label)        { color: #94A3B8 !important; }
+:global(.v-theme--dark .v-divider)      { border-color: #2D3748 !important; }
+:global(.v-theme--dark .page-title)     { color: #E2E8F0 !important; }
+:global(.v-theme--dark .page-sub)       { color: #94A3B8 !important; }
+:global(.v-theme--dark .user-menu-name) { color: #E2E8F0 !important; }
+:global(.v-theme--dark .user-menu-role) { color: #94A3B8 !important; }
 </style>

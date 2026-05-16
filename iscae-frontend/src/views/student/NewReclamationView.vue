@@ -141,6 +141,7 @@
             :style="form.type === t.value ? typeChipStyle(t.value) : {}"
             @click="selectType(t.value)"
           >
+            <!-- L'icône passe en blanc uniquement s'il est sélectionné, sinon garde sa couleur -->
             <v-icon :color="form.type === t.value ? 'white' : t.color" size="28" class="mb-1">
               {{ t.icon }}
             </v-icon>
@@ -239,12 +240,6 @@
         class="mb-5"
         auto-grow
       />
-
-      <!-- Zone d'upload -->
-    
-
-      <!-- Zone drag & drop -->
-     
     </v-card>
 
     <!-- ══════════════════════════════════════════════════════════
@@ -380,7 +375,7 @@ const errors        = ref({})
 const fileInput     = ref(null)
 const docFile       = ref(null)
 const snack         = ref({ show: false, text: '', color: 'success' })
-const niveauCode    = ref('')   // "L1", "L2", "L3"
+const niveauCode    = ref('')
 
 const semestres        = ref([])
 const modules          = ref([])
@@ -396,7 +391,6 @@ const form = ref({
   justification : '',
 })
 
-// ── Mapping niveau → codes semestres autorisés ────────────────────────────────
 const NIVEAU_SEMESTRES = {
   L1: ['S1', 'S2'],
   L2: ['S1', 'S2', 'S3', 'S4'],
@@ -404,6 +398,8 @@ const NIVEAU_SEMESTRES = {
 }
 
 // ── Types disponibles ─────────────────────────────────────────────────────────
+// Les couleurs des bordures actives utilisent des hexadécimaux standards. 
+// Vuetify appliquera sa propre couleur de texte adéquate.
 const ALL_TYPES = [
   {
     value : 'cc',
@@ -450,7 +446,6 @@ const moduleLabel = computed(() =>
   modules.value.find(m => m.id === form.value.module_id)?.name ?? '—'
 )
 
-// Label des semestres autorisés pour l'alerte info
 const allowedSemestreLabels = computed(() => {
   const codes = NIVEAU_SEMESTRES[niveauCode.value] ?? []
   return codes.join(', ')
@@ -499,7 +494,6 @@ const justifRules = [
   v => (v && v.trim().length <= 1000) || 'Maximum 1000 caractères',
 ]
 
-// ── Helpers notes ─────────────────────────────────────────────────────────────
 function clampNote(val) {
   if (val === '' || val === null || val === undefined) return val
   const n = parseFloat(val)
@@ -509,12 +503,11 @@ function clampNote(val) {
   return String(Math.round(n * 100) / 100)
 }
 
-// ── Helpers types ─────────────────────────────────────────────────────────────
 function typeLabel(val)     { return ALL_TYPES.find(t => t.value === val)?.label ?? val }
 function typeChipColor(val) { return ALL_TYPES.find(t => t.value === val)?.color ?? 'grey' }
 function typeChipStyle(val) {
   const t = ALL_TYPES.find(x => x.value === val)
-  return t ? { background: t.bg, color: '#fff' } : {}
+  return t ? { background: t.bg, color: '#ffffff' } : {}
 }
 function selectType(val) {
   form.value.type = val
@@ -522,17 +515,17 @@ function selectType(val) {
   delete errors.value.type
 }
 
-// ── Helpers fichiers ──────────────────────────────────────────────────────────
 function fileIcon(f) {
   if (!f) return 'mdi-file'
   if (f.type === 'application/pdf')  return 'mdi-file-pdf-box'
   if (f.type.startsWith('image/'))   return 'mdi-file-image'
   return 'mdi-file'
 }
+// Ajustement subtil pour le mode sombre
 function fileIconColor(f) {
   if (!f) return 'grey'
-  if (f.type === 'application/pdf')  return 'red'
-  if (f.type.startsWith('image/'))   return 'blue'
+  if (f.type === 'application/pdf')  return 'red-accent-2'
+  if (f.type.startsWith('image/'))   return 'blue-accent-2'
   return 'grey'
 }
 function formatSize(bytes) {
@@ -571,12 +564,10 @@ function removeDoc() {
   if (fileInput.value) fileInput.value.value = ''
 }
 
-// ── Notification ──────────────────────────────────────────────────────────────
 function notify(text, color = 'success') {
   snack.value = { show: true, text, color }
 }
 
-// ── Chargement semestres (filtrés par niveau côté backend) ────────────────────
 async function loadSemestres() {
   loadingSemestres.value = true
   try {
@@ -603,7 +594,6 @@ async function loadModules(semestreId) {
   }
 }
 
-// ── Watchers ──────────────────────────────────────────────────────────────────
 watch(() => form.value.semestre_id, (id) => {
   form.value.type          = ''
   form.value.module_id     = null
@@ -612,10 +602,8 @@ watch(() => form.value.semestre_id, (id) => {
   loadModules(id)
 })
 
-// ── Navigation étapes ─────────────────────────────────────────────────────────
 function goNext() {
   const e = {}
-
   if (step.value === 1) {
     if (!form.value.semestre_id) e.semestre_id = 'Sélectionnez un semestre'
     if (!form.value.type)        e.type        = 'Sélectionnez un type'
@@ -637,24 +625,20 @@ function goNext() {
       }
     }
   }
-
   if (step.value === 2) {
     if (!form.value.justification || form.value.justification.trim().length < 20) {
       e.justification = 'Minimum 20 caractères requis'
     }
   }
-
   errors.value = e
   if (Object.keys(e).length === 0) step.value++
 }
 
-// ── Soumission ────────────────────────────────────────────────────────────────
 async function submit() {
   if (!confirmed.value) {
     notify('Veuillez cocher la case de confirmation.', 'warning')
     return
   }
-
   submitting.value  = true
   globalError.value = ''
 
@@ -665,9 +649,7 @@ async function submit() {
   fd.append('note_actuelle', form.value.note_actuelle)
   fd.append('justification', form.value.justification.trim())
 
-  if (form.value.type === 'cc' &&
-      form.value.note_reclamee !== '' &&
-      form.value.note_reclamee !== null) {
+  if (form.value.type === 'cc' && form.value.note_reclamee !== '' && form.value.note_reclamee !== null) {
     fd.append('note_reclamee', form.value.note_reclamee)
   }
   if (docFile.value) {
@@ -678,12 +660,10 @@ async function submit() {
     const res = await api.post('/student/reclamations', fd, {
       headers: { 'Content-Type': undefined },
     })
-
     const payload = res.data?.data ?? res.data ?? {}
     const newId   = payload.id ?? payload.reclamation_id ?? null
 
     notify('Réclamation soumise avec succès ! Redirection…', 'success')
-
     setTimeout(() => {
       if (newId) {
         router.push({ name: 'student.reclamation.detail', params: { id: String(newId) } })
@@ -691,7 +671,6 @@ async function submit() {
         router.push({ name: 'student.reclamations' })
       }
     }, 1200)
-
   } catch (err) {
     const status = err.response?.status
     const body   = err.response?.data
@@ -706,25 +685,19 @@ async function submit() {
       const step2 = ['justification', 'document']
       if (step1.some(f => errors.value[f]))      step.value = 1
       else if (step2.some(f => errors.value[f])) step.value = 2
-
     } else if (status === 409) {
       globalError.value = body?.message ?? 'Une réclamation active existe déjà pour ce module.'
       step.value = 1
-
     } else if (status === 401) {
       router.push('/login')
-
     } else {
-      globalError.value = body?.message
-        ?? 'Une erreur inattendue est survenue. Veuillez réessayer.'
+      globalError.value = body?.message ?? 'Une erreur inattendue est survenue. Veuillez réessayer.'
     }
-
   } finally {
     submitting.value = false
   }
 }
 
-// ── Montage ───────────────────────────────────────────────────────────────────
 onMounted(loadSemestres)
 </script>
 
@@ -734,7 +707,6 @@ onMounted(loadSemestres)
   padding-bottom: 80px;
 }
 
-/* ── En-tête ──────────────────────────────────────────────────────────────── */
 .page-header { padding: 0 4px; }
 
 /* ── Grille types ─────────────────────────────────────────────────────────── */
@@ -750,26 +722,27 @@ onMounted(loadSemestres)
   align-items: center;
   padding: 16px 12px;
   border-radius: 12px;
-  border: 2px solid rgba(0, 0, 0, 0.08);
+  /* Utilisation d'une bordure translucide adaptative au thème */
+  border: 2px solid rgba(var(--v-border-color), var(--v-border-opacity, 0.12));
   cursor: pointer;
   transition: all 0.2s ease;
-  background: #fff;
+  /* Utilise la couleur de fond de la carte Vuetify en cours (blanche ou sombre) */
+  background: var(--v-theme-surface); 
   text-align: center;
   user-select: none;
 }
 .type-card:hover {
   border-color: rgba(var(--v-theme-primary), 0.4);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 .type-card--active {
   border-color: transparent;
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-  color: #fff !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 .type-card__label { font-weight: 600; font-size: 0.85rem; margin-bottom: 2px; }
-.type-card__desc  { font-size: 0.72rem; opacity: 0.75; }
+.type-card__desc  { font-size: 0.72rem; opacity: 0.70; }
 
 /* ── Zone upload ──────────────────────────────────────────────────────────── */
 .upload-zone {
@@ -779,12 +752,12 @@ onMounted(loadSemestres)
   text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: rgba(var(--v-theme-primary), 0.03);
+  background: rgba(var(--v-theme-primary), 0.04);
 }
 .upload-zone:hover,
 .upload-zone--dragging {
   border-color: rgb(var(--v-theme-primary));
-  background: rgba(var(--v-theme-primary), 0.07);
+  background: rgba(var(--v-theme-primary), 0.08);
 }
 
 /* ── Aperçu fichier ───────────────────────────────────────────────────────── */
@@ -799,7 +772,7 @@ onMounted(loadSemestres)
 }
 .file-preview__info  { flex: 1; min-width: 0; }
 .file-preview__name  { font-weight: 500; font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-preview__size  { font-size: 0.75rem; color: rgba(0, 0, 0, 0.5); }
+.file-preview__size  { font-size: 0.75rem; opacity: 0.6; }
 
 /* ── Récapitulatif ────────────────────────────────────────────────────────── */
 .recap-grid {
@@ -813,19 +786,19 @@ onMounted(loadSemestres)
   gap: 4px;
   padding: 12px 14px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.03);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  /* Fond translucide s'adaptant à l'arrière-plan de l'application (clair ou sombre) */
+  background: rgba(var(--v-border-color), 0.04);
+  border: 1px solid rgba(var(--v-border-color), 0.08);
 }
 .recap-item--full { grid-column: 1 / -1; }
 .recap-label {
   font-size: 0.72rem;
-  color: rgba(0, 0, 0, 0.5);
+  opacity: 0.6;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 .recap-value { font-size: 0.9rem; font-weight: 500; word-break: break-word; }
 
-/* ── Barre navigation ─────────────────────────────────────────────────────── */
 .nav-bar {
   display: flex;
   align-items: center;

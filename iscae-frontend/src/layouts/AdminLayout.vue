@@ -109,20 +109,7 @@
       </v-list>
 
       <!-- ── Footer drawer ── -->
-      <template #append>
-        <div class="drawer-divider" />
-        <div class="drawer-footer" :class="{ 'footer-collapsed': rail && !mobile }">
-          <v-avatar :color="adminAvatarColor" size="34" class="avatar-admin flex-shrink-0">
-            <span class="text-caption font-weight-bold text-white">{{ adminInitials }}</span>
-          </v-avatar>
-          <transition name="label-fade">
-            <div v-if="!rail || mobile" class="footer-info">
-              <span class="footer-name">{{ adminFullName }}</span>
-              <span class="footer-role">{{ roleLabel }}</span>
-            </div>
-          </transition>
-        </div>
-      </template>
+      
 
     </v-navigation-drawer>
 

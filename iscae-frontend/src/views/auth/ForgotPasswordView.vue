@@ -24,11 +24,9 @@
 
               <h1 class="text-h4 font-weight-black text-white mb-2">ISCAE</h1>
               <p class="text-h6 font-weight-light text-white mb-2" style="opacity:0.85">
-                Institut Supérieur de Comptabilité
+                Institut Supérieur de Comptabilité et d'Administration des Entreprises
               </p>
-              <p class="text-body-2 text-white mb-10" style="opacity:0.6">
-                et d'Administration des Entreprises
-              </p>
+              
 
               <!-- Étapes preview -->
               <div class="steps-preview">

@@ -8,7 +8,7 @@
         <p class="dash-sub text-capitalize">{{ today }}</p>
       </div>
       <v-btn
-        color="#3B82F6"
+        color="accent"
         variant="flat"
         size="small"
         prepend-icon="mdi-plus"
@@ -37,11 +37,11 @@
 
       <!-- Graphique barre / courbe -->
       <v-col cols="12" md="8">
-        <div class="dark-card">
-          <div class="dark-card-head">
+        <div class="theme-card">
+          <div class="theme-card-head">
             <div>
-              <p class="dark-card-title">Évolution des réclamations</p>
-              <p class="dark-card-sub">Activité sur les 6 derniers mois</p>
+              <p class="theme-card-title">Évolution des réclamations</p>
+              <p class="theme-card-sub">Activité sur les 6 derniers mois</p>
             </div>
             <div class="toggle-group">
               <button
@@ -64,15 +64,14 @@
 
       <!-- Doughnut répartition -->
       <v-col cols="12" md="4">
-        <div class="dark-card">
-          <div class="dark-card-head">
+        <div class="theme-card">
+          <div class="theme-card-head">
             <div>
-              <p class="dark-card-title">Répartition</p>
-              <p class="dark-card-sub">Par statut</p>
+              <p class="theme-card-title">Répartition</p>
+              <p class="theme-card-sub">Par statut</p>
             </div>
           </div>
           <div style="padding:20px 16px 16px">
-            <!-- Doughnut avec total centré -->
             <div class="doughnut-wrap">
               <canvas ref="doughnutRef" aria-label="Répartition par statut"></canvas>
               <div class="doughnut-center">
@@ -80,7 +79,6 @@
                 <span class="doughnut-lbl">Total</span>
               </div>
             </div>
-            <!-- Légende -->
             <div class="dleg-list">
               <div v-for="s in statusLegend" :key="s.key" class="dleg-row">
                 <span class="dleg-dot" :style="{ background: s.color }"></span>
@@ -96,22 +94,22 @@
     </v-row>
 
     <!-- Réclamations récentes -->
-    <div class="dark-card">
-      <div class="dark-card-head">
-        <p class="dark-card-title">Réclamations récentes</p>
+    <div class="theme-card">
+      <div class="theme-card-head">
+        <p class="theme-card-title">Réclamations récentes</p>
         <router-link :to="{ name: 'student.reclamations' }" class="see-all">
           Voir tout <v-icon size="13">mdi-arrow-right</v-icon>
         </router-link>
       </div>
 
       <div v-if="loading" class="py-8 text-center">
-        <v-progress-circular indeterminate color="#3B82F6" size="28" />
+        <v-progress-circular indeterminate color="accent" size="28" />
       </div>
 
       <div v-else-if="recent.length === 0" class="empty">
-        <v-icon size="40" color="#4B5563">mdi-inbox-outline</v-icon>
-        <p style="color:#6B7280;font-size:13px">Aucune réclamation pour le moment</p>
-        <v-btn size="small" variant="tonal" color="#3B82F6" :to="{ name: 'student.reclamations.new' }">
+        <v-icon size="40" color="secondary">mdi-inbox-outline</v-icon>
+        <p class="empty-text">Aucune réclamation pour le moment</p>
+        <v-btn size="small" variant="tonal" color="accent" :to="{ name: 'student.reclamations.new' }">
           Créer une réclamation
         </v-btn>
       </div>
@@ -140,7 +138,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, inject } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api/axios'
@@ -148,12 +146,22 @@ import api from '@/api/axios'
 Chart.register(...registerables)
 
 const authStore   = useAuthStore()
+const isDark      = inject('isDark')
 const loading     = ref(true)
 const list        = ref([])
 const mainRef     = ref(null)
 const doughnutRef = ref(null)
-const chartType   = ref('bar')   // 'bar' | 'line'
+const chartType   = ref('bar')
 let mainChart, doughnutChart
+
+// ─── Couleurs adaptées au thème ───────────────────────────
+const gridColor   = computed(() => isDark.value ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)')
+const tickColor   = computed(() => isDark.value ? '#6B7280' : '#9CA3AF')
+const tooltipBg   = computed(() => isDark.value ? '#1F2937' : '#ffffff')
+const tooltipTitle = computed(() => isDark.value ? '#9CA3AF' : '#6B7280')
+const tooltipBody = computed(() => isDark.value ? '#F9FAFB' : '#111827')
+const tooltipBorder = computed(() => isDark.value ? '#374151' : '#E5E7EB')
+const doughnutBorder = computed(() => isDark.value ? '#111827' : '#ffffff')
 
 // ─── Identité ─────────────────────────────────────────────
 const firstName = computed(() =>
@@ -231,9 +239,8 @@ const recent = computed(() =>
 // ─── Agrégation mensuelle (6 mois) ────────────────────────
 function buildMonthlyData(items) {
   const map = {}
-  // Initialiser les 6 derniers mois
   for (let i = 5; i >= 0; i--) {
-    const d   = new Date()
+    const d = new Date()
     d.setDate(1)
     d.setMonth(d.getMonth() - i)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -258,6 +265,7 @@ function buildMonthlyData(items) {
 
 // ─── Rendu graphique principal ────────────────────────────
 function renderMain() {
+  if (!mainRef.value) return
   const { labels, data } = buildMonthlyData(list.value)
   if (mainChart) mainChart.destroy()
 
@@ -286,10 +294,10 @@ function renderMain() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#fff',
-          titleColor: '#6B7280',
-          bodyColor: '#111827',
-          borderColor: '#E5E7EB',
+          backgroundColor: tooltipBg.value,
+          titleColor: tooltipTitle.value,
+          bodyColor: tooltipBody.value,
+          borderColor: tooltipBorder.value,
           borderWidth: 1,
           padding: 10,
           callbacks: { label: ctx => ` ${ctx.parsed.y} réclamation(s)` },
@@ -297,12 +305,12 @@ function renderMain() {
       },
       scales: {
         x: {
-          grid: { color: 'rgba(0,0,0,0.05)' },
-          ticks: { color: '#9CA3AF', font: { size: 12 } },
+          grid: { color: gridColor.value },
+          ticks: { color: tickColor.value, font: { size: 12 } },
         },
         y: {
-          grid: { color: 'rgba(0,0,0,0.05)' },
-          ticks: { color: '#9CA3AF', font: { size: 12 }, stepSize: 1 },
+          grid: { color: gridColor.value },
+          ticks: { color: tickColor.value, font: { size: 12 }, stepSize: 1 },
           beginAtZero: true,
         },
       },
@@ -312,6 +320,7 @@ function renderMain() {
 
 // ─── Rendu doughnut ───────────────────────────────────────
 function renderDoughnut() {
+  if (!doughnutRef.value) return
   const segments = statusLegend.value
   if (!segments.length) return
   if (doughnutChart) doughnutChart.destroy()
@@ -323,7 +332,7 @@ function renderDoughnut() {
         data: segments.map(s => s.count),
         backgroundColor: segments.map(s => s.color),
         borderWidth: 3,
-        borderColor: '#ffffff',
+        borderColor: doughnutBorder.value,
         hoverOffset: 6,
       }],
     },
@@ -334,10 +343,10 @@ function renderDoughnut() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#fff',
-          titleColor: '#6B7280',
-          bodyColor: '#111827',
-          borderColor: '#E5E7EB',
+          backgroundColor: tooltipBg.value,
+          titleColor: tooltipTitle.value,
+          bodyColor: tooltipBody.value,
+          borderColor: tooltipBorder.value,
           borderWidth: 1,
           callbacks: { label: ctx => ` ${ctx.label} : ${ctx.parsed}` },
         },
@@ -350,6 +359,13 @@ function switchChart(type) {
   chartType.value = type
   renderMain()
 }
+
+// ─── Rechargement graphiques quand thème change ───────────
+watch(isDark, async () => {
+  await nextTick()
+  renderMain()
+  renderDoughnut()
+})
 
 // ─── Chargement ───────────────────────────────────────────
 async function load() {
@@ -368,50 +384,83 @@ async function load() {
 }
 
 onMounted(load)
+onUnmounted(() => {
+  mainChart?.destroy()
+  doughnutChart?.destroy()
+})
 </script>
 
 <style scoped>
 .dash       { max-width: 1200px; }
-.dash-title { font-size: 20px; font-weight: 700; color: #111827; margin: 0; }
-.dash-sub   { font-size: 13px; color: #6B7280; margin: 4px 0 0; }
 
-/* KPI */
+/* ── Titres page ── */
+.dash-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: rgb(var(--v-theme-on-surface));
+  margin: 0;
+}
+.dash-sub {
+  font-size: 13px;
+  color: rgb(var(--v-theme-text-secondary));
+  margin: 4px 0 0;
+}
+
+/* ── KPI ── */
 .kpi-card {
-  background: #fff;
-  border: 1px solid #E5E7EB;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-border-default));
   border-radius: 12px;
   padding: 16px;
   transition: box-shadow .2s;
 }
-.kpi-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.07); }
+.kpi-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 .kpi-icon {
   width: 36px; height: 36px; border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
   margin-bottom: 10px;
 }
-.kpi-val { font-size: 26px; font-weight: 700; color: #111827; line-height: 1; }
-.kpi-lbl { font-size: 12px; color: #6B7280; margin-top: 3px; }
+.kpi-val {
+  font-size: 26px;
+  font-weight: 700;
+  color: rgb(var(--v-theme-on-surface));
+  line-height: 1;
+}
+.kpi-lbl {
+  font-size: 12px;
+  color: rgb(var(--v-theme-text-secondary));
+  margin-top: 3px;
+}
 
-/* Card (anciennement dark-card) */
-.dark-card {
-  background: #fff;
-  border: 1px solid #E5E7EB;
+/* ── Card générique ── */
+.theme-card {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgb(var(--v-theme-border-default));
   border-radius: 16px;
   overflow: hidden;
   height: 100%;
 }
-.dark-card-head {
+.theme-card-head {
   display: flex; align-items: flex-start; justify-content: space-between;
   padding: 16px 20px 14px;
-  border-bottom: 1px solid #F3F4F6;
+  border-bottom: 1px solid rgb(var(--v-theme-border-light));
 }
-.dark-card-title { font-size: 15px; font-weight: 600; color: #111827; margin: 0; }
-.dark-card-sub   { font-size: 12px; color: #9CA3AF; margin: 3px 0 0; }
+.theme-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+  margin: 0;
+}
+.theme-card-sub {
+  font-size: 12px;
+  color: rgb(var(--v-theme-text-secondary));
+  margin: 3px 0 0;
+}
 
-/* Toggle barres/courbe */
+/* ── Toggle barres/courbe ── */
 .toggle-group {
   display: flex; gap: 3px;
-  background: #F3F4F6;
+  background: rgb(var(--v-theme-surface-variant));
   border-radius: 8px;
   padding: 3px;
 }
@@ -419,16 +468,17 @@ onMounted(load)
   font-size: 12px; font-weight: 500;
   padding: 5px 14px; border-radius: 6px;
   border: none; cursor: pointer;
-  color: #6B7280; background: transparent;
+  color: rgb(var(--v-theme-text-secondary));
+  background: transparent;
   transition: all .15s;
 }
 .toggle-btn.active {
-  background: #0F2D5E;
+  background: rgb(var(--v-theme-primary));
   color: #fff;
   box-shadow: 0 1px 4px rgba(15,45,94,0.25);
 }
 
-/* Chart area */
+/* ── Chart area ── */
 .chart-area {
   position: relative; width: 100%;
   height: 320px;
@@ -436,7 +486,7 @@ onMounted(load)
   box-sizing: border-box;
 }
 
-/* Doughnut */
+/* ── Doughnut ── */
 .doughnut-wrap {
   position: relative;
   height: 180px;
@@ -450,48 +500,59 @@ onMounted(load)
   text-align: center;
   pointer-events: none;
 }
-.doughnut-num { display: block; font-size: 28px; font-weight: 700; color: #111827; line-height: 1; }
-.doughnut-lbl { display: block; font-size: 12px; color: #9CA3AF; margin-top: 3px; }
-
-/* Légende doughnut */
-.dleg-list { display: flex; flex-direction: column; gap: 10px; }
-.dleg-row {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13px;
+.doughnut-num {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  color: rgb(var(--v-theme-on-surface));
+  line-height: 1;
 }
-.dleg-dot   { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.dleg-label { flex: 1; color: #374151; }
-.dleg-count { font-weight: 700; color: #111827; min-width: 16px; text-align: right; }
-.dleg-pct   { font-size: 12px; color: #9CA3AF; min-width: 38px; text-align: right; }
+.doughnut-lbl {
+  display: block;
+  font-size: 12px;
+  color: rgb(var(--v-theme-text-secondary));
+  margin-top: 3px;
+}
 
-/* Voir tout */
+/* ── Légende doughnut ── */
+.dleg-list { display: flex; flex-direction: column; gap: 10px; }
+.dleg-row  { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.dleg-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.dleg-label { flex: 1; color: rgb(var(--v-theme-on-surface)); }
+.dleg-count { font-weight: 700; color: rgb(var(--v-theme-on-surface)); min-width: 16px; text-align: right; }
+.dleg-pct   { font-size: 12px; color: rgb(var(--v-theme-text-secondary)); min-width: 38px; text-align: right; }
+
+/* ── Voir tout ── */
 .see-all {
-  font-size: 12px; color: #2563EB;
+  font-size: 12px;
+  color: rgb(var(--v-theme-accent));
   text-decoration: none;
   display: flex; align-items: center; gap: 2px;
 }
 
-/* Liste récente */
+/* ── Liste récente ── */
 .empty {
   display: flex; flex-direction: column;
   align-items: center; gap: 10px;
-  padding: 36px; color: #9CA3AF; font-size: 13px;
+  padding: 36px;
 }
+.empty-text { color: rgb(var(--v-theme-text-secondary)); font-size: 13px; margin: 0; }
+
 .recl-row {
   display: flex; align-items: center; gap: 12px;
   padding: 13px 20px;
-  border-bottom: 1px solid #F9FAFB;
+  border-bottom: 1px solid rgb(var(--v-theme-border-light));
   cursor: pointer;
   transition: background .12s;
 }
 .recl-row:last-child { border-bottom: none; }
-.recl-row:hover { background: #F8FAFC; }
-.recl-dot   { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.recl-info  { flex: 1; min-width: 0; }
-.recl-ref   { display: block; font-size: 13px; font-weight: 600; color: #111827; }
-.recl-sub   { display: block; font-size: 11px; color: #6B7280; margin-top: 2px; }
+.recl-row:hover { background: rgb(var(--v-theme-surface-variant)); }
+.recl-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.recl-info { flex: 1; min-width: 0; }
+.recl-ref  { display: block; font-size: 13px; font-weight: 600; color: rgb(var(--v-theme-on-surface)); }
+.recl-sub  { display: block; font-size: 11px; color: rgb(var(--v-theme-text-secondary)); margin-top: 2px; }
 .recl-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-.recl-date  { font-size: 11px; color: #9CA3AF; }
+.recl-date  { font-size: 11px; color: rgb(var(--v-theme-text-secondary)); }
 .chip       { display: inline-block; }
 
 .mb-5 { margin-bottom: 20px; }

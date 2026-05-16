@@ -153,7 +153,7 @@
                   <!-- Séparateur -->
                   <div class="d-flex align-center mb-5">
                     <div class="flex-1 divider-line" />
-                    <span class="divider-text mx-3">ou</span>
+                    <span class="divider-text mx-3"></span>
                     <div class="flex-1 divider-line" />
                   </div>
 
