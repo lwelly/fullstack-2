@@ -4,7 +4,6 @@
       <v-row align="center" justify="center">
         <v-col cols="12" sm="9" md="6" lg="5">
 
-          <!-- Logo -->
           <div class="text-center mb-6">
             <div class="logo-circle mx-auto mb-3">
               <img
@@ -19,7 +18,6 @@
 
           <v-card rounded="xl" elevation="8" class="pa-6">
 
-            <!-- Stepper -->
             <div class="d-flex align-center justify-center mb-6 stepper">
               <template v-for="(s, i) in steps" :key="i">
                 <div class="step-item" :class="{ active: step === i+1, done: step > i+1 }">
@@ -33,7 +31,6 @@
               </template>
             </div>
 
-            <!-- Erreur globale -->
             <v-alert
               v-if="errorMsg"
               type="error"
@@ -46,9 +43,8 @@
               {{ errorMsg }}
             </v-alert>
 
-            <!-- ═══ ÉTAPE 1 : Identité ═══ -->
             <div v-if="step === 1">
-              <h2 class="text-h6 font-weight-bold mb-1">Vérification de votre identité</h2>
+              <h2 class="text-h6 font-weight-bold mb-1 header-title">Vérification de votre identité</h2>
               <p class="text-body-2 text-medium-emphasis mb-4">
                 Saisissez votre matricule et votre <strong>email personnel</strong>
                 (Gmail, Hotmail, etc.) tels qu'enregistrés par l'administration.
@@ -61,6 +57,7 @@
                 variant="outlined"
                 rounded="lg"
                 class="mb-3"
+                color="iscae-green"
                 :disabled="loading"
                 @keyup.enter="handleVerifyIdentity"
               />
@@ -72,6 +69,7 @@
                 variant="outlined"
                 rounded="lg"
                 class="mb-1"
+                color="iscae-green"
                 :disabled="loading"
                 hint="Saisissez votre adresse email personnelle (Gmail, Hotmail, etc.)"
                 persistent-hint
@@ -79,7 +77,7 @@
               />
 
               <v-btn
-                block color="primary" size="large" rounded="lg" class="mt-4"
+                block size="large" rounded="lg" class="mt-4 text-white btn-iscae"
                 :loading="loading"
                 prepend-icon="mdi-account-check"
                 @click="handleVerifyIdentity"
@@ -88,20 +86,18 @@
               </v-btn>
             </div>
 
-            <!-- ═══ ÉTAPE 2 : OTP ═══ -->
             <div v-if="step === 2">
-              <h2 class="text-h6 font-weight-bold mb-1">Vérification par email</h2>
+              <h2 class="text-h6 font-weight-bold mb-1 header-title">Vérification par email</h2>
               <p class="text-body-2 text-medium-emphasis mb-2">
                 Un code à 6 chiffres a été envoyé à
                 <strong>{{ maskedEmail }}</strong>
               </p>
 
-              <!-- Infos étudiant -->
-              <v-card variant="tonal" color="primary" rounded="lg" class="pa-3 mb-4">
+              <v-card variant="tonal" class="pa-3 mb-4 student-info-card" rounded="lg">
                 <div class="d-flex align-center" style="gap:10px">
-                  <v-icon color="primary">mdi-account-school</v-icon>
+                  <v-icon class="icon-iscae">mdi-account-school</v-icon>
                   <div>
-                    <div class="font-weight-bold">{{ studentInfo.name }}</div>
+                    <div class="font-weight-bold text-iscae-dark">{{ studentInfo.name }}</div>
                     <div class="text-caption text-medium-emphasis">
                       {{ studentInfo.filiere }}
                       <span v-if="studentInfo.filiere && studentInfo.niveau"> — </span>
@@ -117,12 +113,13 @@
                 type="number"
                 variant="outlined"
                 class="mb-3"
+                color="iscae-green"
                 :disabled="loading"
                 @finish="handleVerifyOtp"
               />
 
               <v-btn
-                block color="primary" size="large" rounded="lg"
+                block size="large" rounded="lg" class="text-white btn-iscae"
                 :loading="loading"
                 prepend-icon="mdi-shield-check"
                 @click="handleVerifyOtp"
@@ -134,6 +131,7 @@
                 <v-btn
                   variant="text"
                   size="small"
+                  class="text-iscae-green"
                   :disabled="resendCooldown > 0 || loading"
                   @click="handleResendOtp"
                 >
@@ -142,9 +140,8 @@
               </div>
             </div>
 
-            <!-- ═══ ÉTAPE 3 : Mot de passe ═══ -->
             <div v-if="step === 3">
-              <h2 class="text-h6 font-weight-bold mb-1">Définir votre mot de passe</h2>
+              <h2 class="text-h6 font-weight-bold mb-1 header-title">Définir votre mot de passe</h2>
               <p class="text-body-2 text-medium-emphasis mb-4">
                 Choisissez un mot de passe sécurisé pour votre compte.
               </p>
@@ -153,6 +150,7 @@
                 v-model="form.password"
                 label="Mot de passe *"
                 prepend-inner-icon="mdi-lock"
+                color="iscae-green"
                 :type="showPwd ? 'text' : 'password'"
                 :append-inner-icon="showPwd ? 'mdi-eye-off' : 'mdi-eye'"
                 @click:append-inner="showPwd = !showPwd"
@@ -167,6 +165,7 @@
                 v-model="form.passwordConfirm"
                 label="Confirmer le mot de passe *"
                 prepend-inner-icon="mdi-lock-check"
+                color="iscae-green"
                 :type="showPwd ? 'text' : 'password'"
                 variant="outlined"
                 rounded="lg"
@@ -177,7 +176,7 @@
               />
 
               <v-btn
-                block color="success" size="large" rounded="lg"
+                block size="large" rounded="lg" class="text-white btn-iscae-success"
                 :loading="loading"
                 prepend-icon="mdi-check-circle"
                 @click="handleSetPassword"
@@ -186,20 +185,18 @@
               </v-btn>
             </div>
 
-            <!-- ═══ SUCCÈS ═══ -->
             <div v-if="step === 4" class="text-center py-6">
-              <v-icon size="72" color="success">mdi-check-circle</v-icon>
-              <h2 class="text-h6 font-weight-bold mt-3 mb-2">Compte créé avec succès !</h2>
+              <v-icon size="72" class="icon-iscae">mdi-check-circle</v-icon>
+              <h2 class="text-h6 font-weight-bold mt-3 mb-2 text-iscae-dark">Compte créé avec succès !</h2>
               <p class="text-body-2 text-medium-emphasis mb-4">
                 Bienvenue <strong>{{ studentInfo.name }}</strong>. Redirection en cours...
               </p>
-              <v-progress-linear indeterminate color="success" rounded height="4" />
+              <v-progress-linear indeterminate class="progress-iscae" rounded height="4" />
             </div>
 
-            <!-- Lien connexion -->
             <div v-if="step < 4" class="text-center mt-4">
               <span class="text-body-2 text-medium-emphasis">Déjà un compte ? </span>
-              <router-link :to="{ name: 'login' }" class="text-primary font-weight-medium">
+              <router-link :to="{ name: 'login' }" class="text-iscae-green font-weight-medium link-hover">
                 Se connecter
               </router-link>
             </div>
@@ -239,7 +236,6 @@ const form = ref({
   passwordConfirm: '',
 })
 
-// Données conservées entre les étapes
 const studentId   = ref(null)
 const maskedEmail = ref('')
 const studentInfo = ref({ name: '', filiere: '', niveau: '' })
@@ -247,16 +243,11 @@ const studentInfo = ref({ name: '', filiere: '', niveau: '' })
 const resendCooldown = ref(0)
 let cooldownTimer = null
 
-// ── Computed ──────────────────────────────────────────────────────────────
 const pwdMismatch = computed(() =>
   form.value.passwordConfirm.length > 0 &&
   form.value.password !== form.value.passwordConfirm
 )
 
-// ══════════════════════════════════════════════════════════════════════════
-// ÉTAPE 1 — Vérifier identité
-// POST /api/v1/auth/verify-identity
-// ══════════════════════════════════════════════════════════════════════════
 async function handleVerifyIdentity() {
   errorMsg.value = ''
   if (!form.value.matricule.trim() || !form.value.email.trim()) {
@@ -271,15 +262,9 @@ async function handleVerifyIdentity() {
     })
     const data = res.data?.data ?? res.data
 
-    console.log('[Register] Étape 1 réponse:', data)
-
-    // Sauvegarder l'id étudiant
     studentId.value = data.student_id
-
-    // Masquer l'email
     maskedEmail.value = maskEmail(data.email ?? form.value.email)
 
-    // Construire le nom — évite le mélange ?? et ||
     const rawName = data.full_name
     const builtName = ((data.prenom ?? '') + ' ' + (data.nom ?? '')).trim()
     studentInfo.value = {
@@ -288,31 +273,20 @@ async function handleVerifyIdentity() {
       niveau:  data.niveau  ?? '',
     }
 
-    // Envoyer l'OTP automatiquement
     await sendOtp()
-
   } catch (err) {
-    console.error('[Register] Étape 1 erreur:', err.response?.data)
     errorMsg.value = err.response?.data?.message ?? 'Erreur de vérification.'
   } finally {
     loading.value = false
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// ENVOYER OTP
-// POST /api/v1/auth/send-otp
-// ══════════════════════════════════════════════════════════════════════════
 async function sendOtp() {
-  console.log('[sendOtp] student_id =', studentId.value)  // ← vérifier
-  console.log('[sendOtp] email =', form.value.email)
-
   try {
-    const res = await api.post('/auth/send-otp', {
+    await api.post('/auth/send-otp', {
       student_id: studentId.value,
       email:      form.value.email.trim().toLowerCase(),
     })
-    console.log('[sendOtp] réponse:', res.data)
   } catch (err) {
     console.error('[sendOtp] erreur:', err.response?.data)
   } finally {
@@ -321,9 +295,6 @@ async function sendOtp() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// RENVOYER OTP
-// ══════════════════════════════════════════════════════════════════════════
 async function handleResendOtp() {
   if (resendCooldown.value > 0) return
   loading.value  = true
@@ -350,10 +321,6 @@ function startResendCooldown() {
   }, 1000)
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// ÉTAPE 2 — Vérifier OTP
-// POST /api/v1/auth/verify-otp
-// ══════════════════════════════════════════════════════════════════════════
 async function handleVerifyOtp() {
   errorMsg.value = ''
   if (!form.value.otp || form.value.otp.length < 6) {
@@ -366,14 +333,8 @@ async function handleVerifyOtp() {
       student_id: studentId.value,
       otp_code:   form.value.otp,
     })
-
-    console.log('[Register] Étape 2 : OTP vérifié ✅')
-
-    // Passer à l'étape 3
     step.value = 3
-
   } catch (err) {
-    console.error('[Register] Étape 2 erreur:', err.response?.data)
     errorMsg.value = err.response?.data?.message ?? 'Code OTP invalide.'
     form.value.otp = ''
   } finally {
@@ -381,13 +342,8 @@ async function handleVerifyOtp() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// ÉTAPE 3 — Créer le compte
-// POST /api/v1/auth/register
-// ══════════════════════════════════════════════════════════════════════════
 async function handleSetPassword() {
   errorMsg.value = ''
-
   if (!form.value.password || form.value.password.length < 8) {
     errorMsg.value = 'Le mot de passe doit contenir au moins 8 caractères.'
     return
@@ -413,10 +369,8 @@ async function handleSetPassword() {
       return
     }
 
-    // ✅ Utiliser setToken du store (clé = 'auth_token')
     authStore.setToken(token)
 
-    // ✅ Charger l'utilisateur
     if (user) {
       authStore.user = user
     } else {
@@ -428,33 +382,20 @@ async function handleSetPassword() {
       }
     }
 
-    // ✅ Marquer comme initialisé pour éviter double init
     authStore.initialized = true
-  
-    console.log('[Register] isAuthenticated =', authStore.isAuthenticated)
-    console.log('[Register] role =', authStore.user?.role)
-
-    // ✅ Afficher succès
     step.value = 4
 
-    // ✅ Rediriger directement sans setTimeout
     setTimeout(() => {
       router.push({ name: 'student.dashboard' })
     }, 2000)
 
   } catch (err) {
-    console.error('[Register] erreur:', err.response?.data)
     errorMsg.value = err.response?.data?.message ?? 'Erreur lors de la création du compte.'
   } finally {
     loading.value = false
   }
 }
 
-
-
-// ══════════════════════════════════════════════════════════════════════════
-// HELPER — Masquer l'email
-// ══════════════════════════════════════════════════════════════════════════
 function maskEmail(email) {
   if (!email) return '***@***.***'
   const parts = email.split('@')
@@ -471,10 +412,21 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* ── Page ── */
+/* ── Page Background Harmonisé (Vert & Bleu ISCAE) ── */
 .register-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a237e 0%, #283593 50%, #3949ab 100%);
+  background: linear-gradient(135deg, #0b8243 0%, #226b77 60%, #79c2c4 100%);
+}
+
+/* ── Couleurs de police & titres ── */
+.header-title {
+  color: #0b8243;
+}
+.text-iscae-green {
+  color: #0b8243 !important;
+}
+.text-iscae-dark {
+  color: #226b77 !important;
 }
 
 /* ── Logo ── */
@@ -487,7 +439,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 }
 .logo-img {
   width: 64px;
@@ -497,7 +449,24 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* ── Stepper ── */
+/* ── Boutons personnalisés ── */
+.btn-iscae {
+  background-color: #0b8243 !important;
+  transition: transform 0.2s, background-color 0.2s;
+}
+.btn-iscae:hover {
+  background-color: #096d37 !important;
+  transform: translateY(-1px);
+}
+.btn-iscae-success {
+  background: linear-gradient(90deg, #0b8243 0%, #226b77 100%) !important;
+  transition: opacity 0.2s;
+}
+.btn-iscae-success:hover {
+  opacity: 0.9;
+}
+
+/* ── Stepper aux couleurs ISCAE ── */
 .stepper { gap: 8px; }
 
 .step-item {
@@ -519,13 +488,15 @@ onUnmounted(() => {
   font-size: 14px;
   transition: all 0.3s ease;
 }
+/* Étape active : Vert ISCAE */
 .step-item.active .step-circle {
-  background: #1a237e;
+  background: #0b8243;
   color: #ffffff;
-  box-shadow: 0 2px 10px rgba(26, 35, 126, 0.45);
+  box-shadow: 0 2px 10px rgba(11, 130, 67, 0.4);
 }
+/* Étape terminée : Bleu Vert ISCAE */
 .step-item.done .step-circle {
-  background: #4caf50;
+  background: #226b77;
   color: #ffffff;
 }
 
@@ -535,11 +506,11 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .step-item.active .step-label {
-  color: #1a237e;
+  color: #0b8243;
   font-weight: 600;
 }
 .step-item.done .step-label {
-  color: #4caf50;
+  color: #226b77;
 }
 
 .step-line {
@@ -551,6 +522,21 @@ onUnmounted(() => {
   transition: background 0.3s ease;
 }
 .step-line.done {
-  background: #4caf50;
+  background: #226b77;
+}
+
+/* ── Carte Infos Étudiant & Divers ── */
+.student-info-card {
+  background-color: rgba(34, 107, 119, 0.1) !important;
+  border: 1px solid rgba(34, 107, 119, 0.2) !important;
+}
+.icon-iscae {
+  color: #0b8243 !important;
+}
+.progress-iscae {
+  color: #0b8243 !important;
+}
+.link-hover:hover {
+  text-decoration: underline;
 }
 </style>
