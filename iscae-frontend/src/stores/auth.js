@@ -15,6 +15,22 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmin         = computed(() => user.value?.role === 'admin')
   const isStudent       = computed(() => user.value?.role === 'student')
 
+  function resolveDisplayName(u) {
+    if (!u) return null
+    if (u.name?.trim()) return u.name.trim()
+    const s = u.student
+    if (!s) return null
+    if (s.full_name?.trim()) return s.full_name.trim()
+    const parts = [s.prenom ?? s.first_name, s.nom ?? s.last_name].filter(Boolean)
+    return parts.length ? parts.join(' ') : null
+  }
+
+  const displayName = computed(() => resolveDisplayName(user.value) ?? 'Étudiant')
+  const firstName   = computed(() => {
+    const name = resolveDisplayName(user.value)
+    return name ? name.split(/\s+/)[0] : 'Étudiant'
+  })
+
   // ══════════════════════════════════════════════════════════════════════
   // DEVICE FINGERPRINT — Générer ou réutiliser
   // ══════════════════════════════════════════════════════════════════════
@@ -356,6 +372,8 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     isStudent,
+    displayName,
+    firstName,
 
     // ── Auth de base ──────────────────────────────────────────────────
     init,

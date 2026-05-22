@@ -119,7 +119,7 @@
 
       <!-- Breadcrumb / titre -->
       <div class="appbar-breadcrumb ml-2">
-        <span class="appbar-section">Étudiant</span>
+        <span class="appbar-section">{{ firstName }}</span>
         <v-icon size="14" :color="isDark ? '#565F89' : '#CBD5E1'" class="mx-1">mdi-chevron-right</v-icon>
         <span class="appbar-page" :class="{ 'page-dark': isDark }">{{ currentPageTitle }}</span>
       </div>
@@ -186,8 +186,8 @@
               <span v-else class="text-body-2 font-weight-bold text-white">{{ initials }}</span>
             </v-avatar>
             <div class="user-menu-info">
-              <div class="user-menu-name">{{ user?.name ?? 'Étudiant' }}</div>
-              <div class="user-menu-role">{{ user?.email ?? 'Étudiant' }}</div>
+              <div class="user-menu-name">{{ displayName }}</div>
+              <div class="user-menu-role">{{ user?.email ?? '—' }}</div>
             </div>
           </div>
           <v-divider class="mb-1" />
@@ -246,10 +246,11 @@ function toggleSidebar() {
 }
 
 /* ── User ── */
-const user      = computed(() => authStore.user ?? {})
-const firstName = computed(() => (user.value?.name ?? 'Étudiant').split(' ')[0])
+const user        = computed(() => authStore.user ?? {})
+const displayName = computed(() => authStore.displayName)
+const firstName   = computed(() => authStore.firstName)
 const initials  = computed(() => {
-  const name = user.value?.name ?? user.value?.email ?? 'ET'
+  const name = displayName.value !== 'Étudiant' ? displayName.value : (user.value?.email ?? 'ET')
   const parts = name.trim().split(' ').filter(Boolean)
   return parts.length >= 2
     ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()

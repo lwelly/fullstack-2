@@ -164,9 +164,7 @@ const tooltipBorder = computed(() => isDark.value ? '#374151' : '#E5E7EB')
 const doughnutBorder = computed(() => isDark.value ? '#111827' : '#ffffff')
 
 // ─── Identité ─────────────────────────────────────────────
-const firstName = computed(() =>
-  (authStore.user?.name ?? 'Étudiant').split(' ')[0]
-)
+const firstName = computed(() => authStore.firstName)
 const today = computed(() =>
   new Date().toLocaleDateString('fr-FR', {
     weekday:'long', day:'numeric', month:'long', year:'numeric',
