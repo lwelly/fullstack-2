@@ -441,6 +441,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import api from '@/api/axios'
+import { useAuthStore } from '@/stores/auth'
+import { resolvePhotoUrl } from '@/utils/photo'
+
+const authStore = useAuthStore()
 
 /* ─── Etat ───────────────────────────────────────────────────── */
 const tab            = ref('info')
@@ -498,11 +502,7 @@ const avatarColor = computed(() => {
 const photoUrl = computed(() => {
   if (localPhotoUrl.value) return localPhotoUrl.value
   const s = profile.value?.student
-  const p = s?.photo_url ?? s?.photo_path
-  if (!p) return null
-  if (p.startsWith('http')) return p
-  const base = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(/\/$/, '')
-  return `${base}/storage/${p.replace(/^\//, '')}`
+  return resolvePhotoUrl(s?.photo_url ?? s?.photo_path)
 })
 
 const pwdCriteria = computed(() => [
@@ -531,10 +531,7 @@ const canSavePwd = computed(() =>
 
 /* ─── Helpers ────────────────────────────────────────────────── */
 function buildUrl(path) {
-  if (!path) return null
-  if (path.startsWith('http')) return path
-  const base = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(/\/$/, '')
-  return `${base}/storage/${path.replace(/^\//, '')}`
+  return resolvePhotoUrl(path)
 }
 
 function fDate(raw) {
@@ -659,6 +656,7 @@ async function uploadPhoto(e) {
       localPhotoUrl.value = null
       await nextTick()
       localPhotoUrl.value = finalUrl
+      authStore.setStudentPhoto(finalUrl)
     }
 
     notify('Photo de profil mise a jour.', 'success')

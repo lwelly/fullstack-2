@@ -92,10 +92,8 @@
         </router-link>
       </v-list>
 
-      <!-- ── Footer drawer ── -->
-      <template #append>
-        
-      </template>
+      <!-- ── Footer drawer — profil ── -->
+     
 
     </v-navigation-drawer>
 
@@ -160,11 +158,7 @@
         <template #activator="{ props }">
           <v-btn v-bind="props" variant="text" rounded="lg" class="mr-2 pa-1 user-btn">
             <v-avatar color="blue-darken-2" size="32">
-              <img
-                v-if="user?.photo_url"
-                :src="user.photo_url"
-                style="width:100%;height:100%;object-fit:cover;border-radius:50%"
-              />
+              <v-img v-if="photoUrl" :src="photoUrl" cover alt="Photo de profil" />
               <span v-else class="text-caption font-weight-bold text-white">{{ initials }}</span>
             </v-avatar>
             <span v-if="!mobile" class="ml-2 user-btn-name" :class="{ 'name-dark': isDark }">
@@ -178,11 +172,7 @@
           <!-- Header user -->
           <div class="user-menu-header">
             <v-avatar color="blue-darken-2" size="42">
-              <img
-                v-if="user?.photo_url"
-                :src="user.photo_url"
-                style="width:100%;height:100%;object-fit:cover;border-radius:50%"
-              />
+              <v-img v-if="photoUrl" :src="photoUrl" cover alt="Photo de profil" />
               <span v-else class="text-body-2 font-weight-bold text-white">{{ initials }}</span>
             </v-avatar>
             <div class="user-menu-info">
@@ -249,6 +239,7 @@ function toggleSidebar() {
 const user        = computed(() => authStore.user ?? {})
 const displayName = computed(() => authStore.displayName)
 const firstName   = computed(() => authStore.firstName)
+const photoUrl    = computed(() => authStore.photoUrl)
 const initials  = computed(() => {
   const name = displayName.value !== 'Étudiant' ? displayName.value : (user.value?.email ?? 'ET')
   const parts = name.trim().split(' ').filter(Boolean)
@@ -305,6 +296,7 @@ async function logout() {
 
 /* ── Lifecycle ── */
 onMounted(() => {
+  authStore.fetchProfile()
   fetchUnread()
   notifTimer = setInterval(fetchUnread, 60_000)
   if (mobile.value) drawer.value = false
@@ -485,6 +477,11 @@ watch(mobile, v => {
   align-items: center;
   gap: 10px;
   padding: 12px 16px 20px;
+  color: inherit;
+  transition: background .15s;
+}
+.drawer-footer:hover {
+  background: rgba(255,255,255,.08);
 }
 .footer-collapsed { justify-content: center; padding: 12px 8px 20px; }
 .footer-info { display: flex; flex-direction: column; overflow: hidden; }

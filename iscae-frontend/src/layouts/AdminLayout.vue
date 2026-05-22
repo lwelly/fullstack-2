@@ -108,8 +108,25 @@
         </template>
       </v-list>
 
-      <!-- ── Footer drawer ── -->
-      
+      <!-- ── Footer drawer — profil ── -->
+      <template #append>
+        <div class="drawer-divider" />
+        <router-link
+          to="/admin/profile"
+          class="drawer-footer text-decoration-none"
+          :class="{ 'footer-collapsed': rail && !mobile }"
+          :title="rail && !mobile ? adminFullName : undefined"
+        >
+          <v-avatar :color="adminAvatarColor" size="36" class="avatar-admin flex-shrink-0">
+            <v-img v-if="adminPhotoUrl" :src="adminPhotoUrl" cover alt="Photo de profil" />
+            <span v-else class="text-caption font-weight-bold text-white">{{ adminInitials }}</span>
+          </v-avatar>
+          <div v-if="!rail || mobile" class="footer-info">
+            <span class="footer-name">{{ adminFullName }}</span>
+            <span class="footer-role">{{ roleLabel }}</span>
+          </div>
+        </router-link>
+      </template>
 
     </v-navigation-drawer>
 
@@ -174,7 +191,8 @@
         <template #activator="{ props }">
           <v-btn v-bind="props" variant="text" rounded="lg" class="mr-2 pa-1 user-btn">
             <v-avatar :color="adminAvatarColor" size="32">
-              <span class="text-caption font-weight-bold text-white">{{ adminInitials }}</span>
+              <v-img v-if="adminPhotoUrl" :src="adminPhotoUrl" cover alt="Photo de profil" />
+              <span v-else class="text-caption font-weight-bold text-white">{{ adminInitials }}</span>
             </v-avatar>
             <span v-if="!mobile" class="ml-2 user-btn-name" :class="{ 'name-dark': isDark }">
               {{ adminFirstName }}
@@ -187,7 +205,8 @@
           <!-- Header user -->
           <div class="user-menu-header">
             <v-avatar :color="adminAvatarColor" size="42">
-              <span class="text-body-2 font-weight-bold text-white">{{ adminInitials }}</span>
+              <v-img v-if="adminPhotoUrl" :src="adminPhotoUrl" cover alt="Photo de profil" />
+              <span v-else class="text-body-2 font-weight-bold text-white">{{ adminInitials }}</span>
             </v-avatar>
             <div class="user-menu-info">
               <div class="user-menu-name">{{ adminFullName }}</div>
@@ -257,15 +276,9 @@ function toggleSidebar() {
 
 /* ── User ── */
 const user = computed(() => auth.user ?? {})
-const adminFullName = computed(() => {
-  const a = user.value?.admin
-  if (a) {
-    const parts = [a.first_name ?? a.prenom ?? '', a.last_name ?? a.nom ?? ''].filter(Boolean)
-    if (parts.length) return parts.join(' ')
-  }
-  return user.value?.email ?? 'Administrateur'
-})
-const adminFirstName = computed(() => adminFullName.value.split(' ')[0])
+const adminFullName  = computed(() => auth.adminDisplayName)
+const adminFirstName = computed(() => auth.adminFirstName)
+const adminPhotoUrl  = computed(() => auth.adminPhotoUrl)
 const adminInitials  = computed(() => {
   const n = adminFullName.value
   const p = n.trim().split(' ').filter(Boolean)
@@ -341,6 +354,7 @@ async function logout() {
 onMounted(() => {
   /* Applique le thème sauvegardé au démarrage */
   vuetifyTheme.global.name.value = currentTheme.value
+  auth.fetchProfile()
   fetchNotifCount()
   setInterval(fetchNotifCount, 60_000)
 
@@ -565,6 +579,11 @@ watch(mobile, v => {
   align-items: center;
   gap: 10px;
   padding: 12px 16px 20px;
+  color: inherit;
+  transition: background .15s;
+}
+.drawer-footer:hover {
+  background: rgba(255,255,255,.08);
 }
 .footer-collapsed { justify-content: center; padding: 12px 8px 20px; }
 .footer-info { display: flex; flex-direction: column; overflow: hidden; }

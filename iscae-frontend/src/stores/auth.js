@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/api/axios'
+import { resolvePhotoUrl } from '@/utils/photo'
 
 export const useAuthStore = defineStore('auth', () => {
 
@@ -30,6 +31,52 @@ export const useAuthStore = defineStore('auth', () => {
     const name = resolveDisplayName(user.value)
     return name ? name.split(/\s+/)[0] : 'Étudiant'
   })
+
+  const photoUrl = computed(() => {
+    const s = user.value?.student
+    return resolvePhotoUrl(s?.photo_url ?? s?.photo_path)
+  })
+
+  function resolveAdminDisplayName(u) {
+    if (!u) return null
+    const a = u.admin
+    if (!a) return null
+    if (a.full_name?.trim()) return a.full_name.trim()
+    const parts = [a.first_name ?? a.prenom, a.last_name ?? a.nom].filter(Boolean)
+    return parts.length ? parts.join(' ') : null
+  }
+
+  const adminDisplayName = computed(() =>
+    resolveAdminDisplayName(user.value) ?? user.value?.email ?? 'Administrateur'
+  )
+  const adminFirstName = computed(() => {
+    const name = resolveAdminDisplayName(user.value)
+    return name ? name.split(/\s+/)[0] : 'Admin'
+  })
+  const adminPhotoUrl = computed(() => {
+    const a = user.value?.admin
+    return resolvePhotoUrl(a?.photo_url ?? a?.photo_path)
+  })
+
+  function setStudentPhoto(url) {
+    if (!user.value?.student) return
+    user.value = {
+      ...user.value,
+      student: { ...user.value.student, photo_url: url },
+    }
+  }
+
+  function setAdminPhoto(url) {
+    if (!user.value?.admin) return
+    user.value = {
+      ...user.value,
+      admin: { ...user.value.admin, photo_url: url },
+    }
+  }
+
+  function isAdminRole(role) {
+    return ['admin', 'super_admin', 'administrator'].includes(role)
+  }
 
   // ══════════════════════════════════════════════════════════════════════
   // DEVICE FINGERPRINT — Générer ou réutiliser
@@ -245,6 +292,23 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res  = await api.get('/auth/me')
       user.value = res.data?.data ?? res.data ?? null
+
+      if (isAdminRole(user.value?.role)) {
+        try {
+          const adminRes = await api.get('/admin/profile')
+          const data = adminRes.data?.data ?? adminRes.data ?? {}
+          if (data.admin) {
+            user.value = {
+              ...user.value,
+              email: data.email ?? user.value.email,
+              admin: data.admin,
+            }
+          }
+        } catch (e) {
+          console.warn('[auth] fetchAdminProfile:', e)
+        }
+      }
+
       return user.value
     } catch (e) {
       console.error('[auth] fetchProfile error:', e)
@@ -374,6 +438,12 @@ export const useAuthStore = defineStore('auth', () => {
     isStudent,
     displayName,
     firstName,
+    photoUrl,
+    adminDisplayName,
+    adminFirstName,
+    adminPhotoUrl,
+    setStudentPhoto,
+    setAdminPhoto,
 
     // ── Auth de base ──────────────────────────────────────────────────
     init,

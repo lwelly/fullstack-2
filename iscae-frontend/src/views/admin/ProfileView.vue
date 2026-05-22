@@ -320,6 +320,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import api from '@/api/axios'
+import { useAuthStore } from '@/stores/auth'
+import { resolvePhotoUrl } from '@/utils/photo'
+
+const authStore = useAuthStore()
 
 // ── State ────────────────────────────────────────
 const loading        = ref(true)
@@ -372,16 +376,9 @@ const initials = computed(() => {
 
 // ✅ photoUrl lit localPhotoUrl en priorité (mise à jour immédiate après upload)
 const photoUrl = computed(() => {
-  // Priorité 1 : URL locale mise à jour après upload
   if (localPhotoUrl.value) return localPhotoUrl.value
-
-  // Priorité 2 : URL venant du profil chargé depuis l'API
   const p = profile.value?.admin?.photo_url ?? profile.value?.admin?.photo_path
-  if (!p) return null
-  if (p.startsWith('http')) return p
-
-  const base = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(/\/$/, '')
-  return `${base}/storage/${p.replace(/^\//, '')}`
+  return resolvePhotoUrl(p)
 })
 
 const avatarColor = computed(() => {
@@ -547,8 +544,9 @@ async function handlePhotoChange(event) {
     // ✅ Remplacer l'aperçu local par l'URL définitive du serveur
     const serverUrl = res.data?.data?.photo_url
     if (serverUrl) {
-      // Ajouter un timestamp pour forcer le rechargement et éviter le cache navigateur
-      localPhotoUrl.value = serverUrl + '?t=' + Date.now()
+      const finalUrl = resolvePhotoUrl(serverUrl) + '?t=' + Date.now()
+      localPhotoUrl.value = finalUrl
+      authStore.setAdminPhoto(finalUrl)
     }
     // Libérer l'URL blob locale
     URL.revokeObjectURL(localPreview)
