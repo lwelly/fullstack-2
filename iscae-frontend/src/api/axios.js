@@ -1,10 +1,10 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: "https://iscae-back.onrender.com/api/v1",
+  baseURL: import.meta.env.VITE_API_URL,
   headers: {
     'Content-Type': 'application/json',
-    'Accept':       'application/json',
+    'Accept': 'application/json',
   },
 })
 
