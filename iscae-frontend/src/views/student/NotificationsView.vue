@@ -1,7 +1,6 @@
 <template>
   <v-container fluid class="pa-4 pa-md-6 surface-variant-bg" style="min-height:100vh;">
 
-    <!-- ═══ EN-TÊTE ══════════════════════════════════════════════════ -->
     <div class="d-flex align-center justify-space-between mb-6 flex-wrap gap-3">
       <h1 class="text-h5 font-weight-bold text-high-emphasis">Notifications</h1>
       <div class="d-flex align-center gap-2">
@@ -21,7 +20,6 @@
       </div>
     </div>
 
-    <!-- ═══ FILTRES ══════════════════════════════════════════════════ -->
     <v-card rounded="lg" elevation="0" border class="pa-3 mb-5">
       <div class="d-flex align-center gap-2 flex-wrap">
         <v-btn
@@ -42,30 +40,25 @@
       </div>
     </v-card>
 
-    <!-- ═══ LOADING ══════════════════════════════════════════════════ -->
     <div v-if="loading" class="d-flex justify-center align-center py-16">
       <v-progress-circular indeterminate color="primary" size="40" />
     </div>
 
-    <!-- ═══ VIDE ══════════════════════════════════════════════════════ -->
     <v-card
       v-else-if="!filteredList.length"
       rounded="lg" elevation="0" border class="pa-12 text-center"
     >
-      <v-icon size="56" color="medium-emphasis" class="mb-3 opacity-60">
-        mdi-bell-off-outline
-      </v-icon>
+      <v-icon size="56" color="medium-emphasis" class="mb-3 opacity-60">mdi-bell-off-outline</v-icon>
       <div class="text-h6 font-weight-bold text-high-emphasis">Aucune notification</div>
       <div class="text-body-2 text-medium-emphasis mt-2">
         {{
           activeTab === 'unread'
             ? 'Vous avez lu toutes vos notifications.'
-            : 'Vous n\'avez pas encore reçu de notifications.'
+            : "Vous n'avez pas encore reçu de notifications."
         }}
       </div>
     </v-card>
 
-    <!-- ═══ LISTE ═════════════════════════════════════════════════════ -->
     <div v-else class="d-flex flex-column ga-2">
       <template v-for="group in groupedList" :key="group.date">
 
@@ -75,84 +68,62 @@
           v-for="notif in group.items" :key="notif.id"
           rounded="lg" elevation="0" border
           class="notif-card"
-          :class="{ 'notif-card--unread': !notif.read_at }"
+          :class="{ 'notif-card--unread': !notif.read_at && !notif.is_read }"
           @click="handleClick(notif)"
         >
           <div class="d-flex align-start pa-4 gap-3">
 
-            <!-- Icône -->
             <div class="notif-icon flex-shrink-0" :style="{ background: notifBg(notif.type) }">
-              <v-icon :color="notifColor(notif.type)" size="18">
-                {{ notifIcon(notif.type) }}
-              </v-icon>
+              <v-icon :color="notifColor(notif.type)" size="18">{{ notifIcon(notif.type) }}</v-icon>
             </div>
 
-            <!-- Contenu -->
             <div class="flex-grow-1" style="min-width:0;">
 
-              <!-- Ligne 1 : titre + badges -->
+              <!-- ✅ Titre : nom matière extrait du titre OU référence -->
               <div class="d-flex align-center justify-space-between gap-2 mb-1">
                 <span class="notif-title text-high-emphasis">
-                  {{ notif.title ?? notif.data?.title ?? 'Notification' }}
+                  {{ extractModuleName(notif) }}
                 </span>
                 <div class="d-flex align-center gap-1 flex-shrink-0">
-                  <span v-if="!notif.read_at" class="unread-dot bg-primary" />
-
-                  <!-- ── Badge STATUT (priorité haute) ── -->
+                  <span v-if="!notif.read_at && !notif.is_read" class="unread-dot bg-primary" />
                   <v-chip
-                    v-if="resolveStatus(notif)"
-                    :color="statusColor(resolveStatus(notif))"
-                    variant="flat"
-                    size="x-small"
-                    label
-                    class="status-chip"
+                    v-if="notif.status"
+                    :color="statusColor(notif.status)"
+                    variant="flat" size="x-small" label class="status-chip"
                   >
-                    <v-icon start size="10">{{ statusIcon(resolveStatus(notif)) }}</v-icon>
-                    {{ statusLabel(resolveStatus(notif)) }}
+                    <v-icon start size="10">{{ statusIcon(notif.status) }}</v-icon>
+                    {{ statusLabel(notif.status) }}
                   </v-chip>
-
-                  <!-- Badge type -->
-                  <v-chip
-                    :color="notifColor(notif.type)"
-                    variant="tonal"
-                    size="x-small"
-                    label
-                  >
+                  <v-chip :color="notifColor(notif.type)" variant="tonal" size="x-small" label>
                     {{ notifTypeLabel(notif.type) }}
                   </v-chip>
                 </div>
               </div>
 
-              <!-- Message -->
-              <p class="notif-message text-medium-emphasis mb-2">
-                {{ notif.message ?? notif.data?.message ?? '' }}
-              </p>
+              <!-- ✅ Pill : référence extraite de data.reference ou du titre -->
+              <div v-if="extractReference(notif)" class="module-pill mb-2">
+                <v-icon size="13" color="primary" class="mr-1">mdi-pound</v-icon>
+                <span>{{ extractReference(notif) }}</span>
+              </div>
 
-              <!-- Ligne 3 : détails statut (si réclamation) + heure + actions -->
+              <p class="notif-message text-medium-emphasis mb-2">{{ notif.message }}</p>
+
               <div class="d-flex align-center justify-space-between gap-2 flex-wrap">
-
-                <!-- Détail statut inline -->
-                <div
-                  v-if="resolveStatus(notif)"
-                  class="status-detail"
-                  :style="{ color: `rgb(var(--v-theme-${statusColor(resolveStatus(notif))}))` }"
-                >
-                  <v-icon size="12" class="mr-1">{{ statusIcon(resolveStatus(notif)) }}</v-icon>
-                  <span>Statut : <strong>{{ statusLabel(resolveStatus(notif)) }}</strong></span>
+                <div v-if="notif.status" class="status-detail" :style="{ color: statusHex(notif.status) }">
+                  <v-icon size="12" class="mr-1">{{ statusIcon(notif.status) }}</v-icon>
+                  Statut : <strong class="ml-1">{{ statusLabel(notif.status) }}</strong>
                 </div>
                 <span v-else class="notif-time text-medium-emphasis opacity-70">
                   <v-icon size="11" class="mr-1">mdi-clock-outline</v-icon>
                   {{ fmtTime(notif.created_at) }}
                 </span>
-
                 <div class="d-flex align-center gap-1">
-                  <!-- Heure (si statut déjà affiché à gauche) -->
-                  <span v-if="resolveStatus(notif)" class="notif-time text-medium-emphasis opacity-70">
+                  <span v-if="notif.status" class="notif-time text-medium-emphasis opacity-70">
                     <v-icon size="11" class="mr-1">mdi-clock-outline</v-icon>
                     {{ fmtTime(notif.created_at) }}
                   </span>
                   <v-btn
-                    v-if="!notif.read_at"
+                    v-if="!notif.read_at && !notif.is_read"
                     variant="text" size="x-small" color="primary"
                     :loading="notif._loading"
                     @click.stop="markRead(notif)"
@@ -173,7 +144,6 @@
       </template>
     </div>
 
-    <!-- ═══ PAGINATION ════════════════════════════════════════════════ -->
     <div v-if="totalPages > 1" class="d-flex justify-center mt-6">
       <v-pagination
         v-model="page" :length="totalPages"
@@ -181,21 +151,16 @@
       />
     </div>
 
-    <!-- ═══ DIALOG CONFIRMATION EFFACER TOUT ════════════════════════ -->
     <v-dialog v-model="confirmClearAll" max-width="360">
       <v-card rounded="xl" elevation="0">
         <v-card-text class="pa-6 text-center">
           <v-icon size="48" color="error" class="mb-3">mdi-delete-sweep-outline</v-icon>
-          <div class="text-h6 font-weight-bold text-high-emphasis mb-2">
-            Effacer toutes les notifications ?
-          </div>
+          <div class="text-h6 font-weight-bold text-high-emphasis mb-2">Effacer toutes les notifications ?</div>
           <div class="text-body-2 text-medium-emphasis">Cette action est irréversible.</div>
         </v-card-text>
         <v-card-actions class="pa-4 pt-0 gap-2">
           <v-btn variant="tonal" rounded="lg" block @click="confirmClearAll = false">Annuler</v-btn>
-          <v-btn color="error" variant="flat" rounded="lg" block :loading="clearingAll" @click="clearAll">
-            Effacer
-          </v-btn>
+          <v-btn color="error" variant="flat" rounded="lg" block :loading="clearingAll" @click="clearAll">Effacer</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -210,7 +175,6 @@ import api from '@/api/axios'
 
 const router = useRouter()
 
-// ── State ───────────────────────────────────────────────────────────
 const notifications   = ref([])
 const loading         = ref(true)
 const markingAll      = ref(false)
@@ -220,20 +184,60 @@ const activeTab       = ref('all')
 const page            = ref(1)
 const PER_PAGE        = 15
 
-// ── Tabs ─────────────────────────────────────────────────────────────
+// ✅ Extrait le nom de matière depuis le titre (ex: "Réclamation #RECL-2026-000020 — Statut mis à jour")
+// Retourne la référence formatée proprement : "RECL-2026-000020"
+function extractReference(notif) {
+  // 1. Depuis data.reference (champ direct)
+  if (notif.data?.reference) return notif.data.reference
+
+  // 2. Depuis le titre via regex
+  const match = (notif.title ?? '').match(/#?(RECL-[\d-]+)/)
+  if (match) return match[1]
+
+  // 3. Depuis le message
+  const matchMsg = (notif.message ?? '').match(/#?(RECL-[\d-]+)/)
+  if (matchMsg) return matchMsg[1]
+
+  return null
+}
+
+// ✅ Titre affiché : module_name si dispo, sinon référence, sinon titre original
+function extractModuleName(notif) {
+  if (notif.module_name) return notif.module_name
+
+  const ref = extractReference(notif)
+  if (ref) return ref
+
+  return notif.title ?? 'Notification'
+}
+
+function isReclamationType(type) {
+  if (!type) return false
+  const t = type.toLowerCase()
+  return (
+    t.includes('reclamation') || t.includes('réclamation') ||
+    t.includes('newreclam')   || t.includes('new_reclam')  ||
+    t.includes('statuschange')|| t.includes('status')      ||
+    t.includes('escalat')     || t.includes('resolv')      ||
+    t.includes('reject')      || t.includes('meeting')
+  )
+}
+
 const tabs = computed(() => [
-  { value: 'all',         label: 'Toutes',       count: notifications.value.length },
-  { value: 'unread',      label: 'Non lues',     count: notifications.value.filter(n => !n.read_at).length },
-  { value: 'reclamation', label: 'Réclamations', count: notifications.value.filter(n => n.type?.includes('reclamation')).length },
+  { value: 'all',         label: 'Toutes',        count: notifications.value.length },
+  { value: 'unread',      label: 'Non lues',       count: notifications.value.filter(n => !n.read_at && !n.is_read).length },
+  { value: 'reclamation', label: 'Réclamations',   count: notifications.value.filter(n => isReclamationType(n.type)).length },
 ])
 
-// ── Computed ─────────────────────────────────────────────────────────
-const unreadCount = computed(() => notifications.value.filter(n => !n.read_at).length)
+const unreadCount = computed(() =>
+  notifications.value.filter(n => !n.read_at && !n.is_read).length
+)
 
 const filteredList = computed(() => {
-  if (activeTab.value === 'unread')      return notifications.value.filter(n => !n.read_at)
-  if (activeTab.value === 'reclamation') return notifications.value.filter(n => n.type?.includes('reclamation'))
-  if (activeTab.value === 'system')      return notifications.value.filter(n => n.type?.includes('system') || n.type?.includes('general'))
+  if (activeTab.value === 'unread')
+    return notifications.value.filter(n => !n.read_at && !n.is_read)
+  if (activeTab.value === 'reclamation')
+    return notifications.value.filter(n => isReclamationType(n.type))
   return notifications.value
 })
 
@@ -254,44 +258,46 @@ const groupedList = computed(() => {
   return Object.entries(groups).map(([date, items]) => ({ date, items }))
 })
 
-// ── Lifecycle ─────────────────────────────────────────────────────────
 onMounted(loadNotifications)
 
 async function loadNotifications() {
   loading.value = true
   try {
     const res = await api.get('/student/notifications')
-    notifications.value = (res.data?.data ?? res.data ?? []).map(n => ({
-      ...n,
-      // Compatibilité : is_read → read_at
-      read_at:   n.read_at ?? (n.is_read ? new Date().toISOString() : null),
-      _loading:  false,
-      _deleting: false,
-    }))
+    const raw = res.data?.data ?? res.data ?? []
+    notifications.value = raw.map(n => ({ ...n, _loading: false, _deleting: false }))
   } catch (e) {
-    console.error('[Notifications] Erreur:', e)
+    console.error('[Notifications] Erreur chargement:', e)
   } finally {
     loading.value = false
   }
 }
 
-// ── Actions ───────────────────────────────────────────────────────────
 async function markRead(notif) {
   notif._loading = true
   try {
     await api.put(`/student/notifications/${notif.id}/read`)
     notif.read_at = new Date().toISOString()
-  } catch (e) { console.error(e) }
-  finally { notif._loading = false }
+    notif.is_read = true
+  } catch (e) {
+    console.error(e)
+  } finally {
+    notif._loading = false
+  }
 }
 
 async function markAllRead() {
   markingAll.value = true
   try {
     await api.put('/student/notifications/read-all')
-    notifications.value.forEach(n => { if (!n.read_at) n.read_at = new Date().toISOString() })
-  } catch (e) { console.error(e) }
-  finally { markingAll.value = false }
+    notifications.value.forEach(n => {
+      if (!n.read_at) { n.read_at = new Date().toISOString(); n.is_read = true }
+    })
+  } catch (e) {
+    console.error(e)
+  } finally {
+    markingAll.value = false
+  }
 }
 
 async function deleteNotif(notif) {
@@ -299,8 +305,11 @@ async function deleteNotif(notif) {
   try {
     await api.delete(`/student/notifications/${notif.id}`)
     notifications.value = notifications.value.filter(n => n.id !== notif.id)
-  } catch (e) { console.error(e) }
-  finally { notif._deleting = false }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    notif._deleting = false
+  }
 }
 
 async function clearAll() {
@@ -309,134 +318,126 @@ async function clearAll() {
     await Promise.all(notifications.value.map(n => api.delete(`/student/notifications/${n.id}`)))
     notifications.value = []
     confirmClearAll.value = false
-  } catch (e) { console.error(e) }
-  finally { clearingAll.value = false }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    clearingAll.value = false
+  }
 }
 
-function handleClick(notif) {
-  if (!notif.read_at) markRead(notif)
+async function handleClick(notif) {
+  if (!notif.read_at && !notif.is_read) markRead(notif)
+
   const data = notif.data ?? {}
-  const type = notif.type ?? ''
+  const type = (notif.type ?? '').toLowerCase()
 
-  if (data.link) {
-    const l = data.link
-    if (typeof l === 'object' || (typeof l === 'string' && l.startsWith('/'))) {
-      router.push(l); return
+  if (isReclamationType(type)) {
+    // 1. ID direct (si backend corrigé)
+    const rid = notif.reclamation_id ?? data.reclamation_id ?? null
+    if (rid) {
+      router.push({ name: 'student.reclamation.detail', params: { id: rid } })
+      return
     }
-  }
 
-  if (type.includes('reclamation') || type.includes('status') || type.includes('escalat') ||
-      type.includes('resolved')    || type.includes('rejected') || type.includes('meeting')) {
-    const rid = data.reclamation_id ?? data.id
-    router.push(rid ? { name: 'student.reclamation.detail', params: { id: rid } } : { name: 'student.reclamations' })
-    return
-  }
+    // 2. ✅ Cherche via la référence unique de CETTE notification
+    const ref = data.reference ?? data.reference_number ?? null
 
-  if (type.includes('document')) {
-    const did = data.document_id ?? data.id
-    router.push(did ? { name: 'student.documents', params: { id: did } } : { name: 'student.dashboard' })
+    if (ref) {
+      try {
+        const res = await api.get('/student/reclamations')
+        const list = res.data?.data ?? res.data ?? []
+
+        // ✅ Trouve la réclamation dont reference_number correspond à CETTE référence
+        const found = list.find(r =>
+          r.reference_number === ref ||
+          r.reference_number === `RECL-${ref}` ||
+          ref.includes(r.reference_number)
+        )
+
+        if (found?.id) {
+          router.push({ name: 'student.reclamation.detail', params: { id: found.id } })
+          return
+        }
+      } catch (e) {
+        console.error('[Notifications] Erreur recherche réclamation:', e)
+      }
+    }
+
+    // 3. Fallback
+    router.push({ name: 'student.reclamations' })
     return
   }
 
   router.push({ name: 'student.dashboard' })
 }
-
-// ── Statut ────────────────────────────────────────────────────────────
-
-/**
- * Résout le statut depuis les différents champs possibles du backend.
- * Priorité : notif.status > data.status > data.reclamation_status > data.new_status
- */
-function resolveStatus(notif) {
-  return notif.status
-    || notif.data?.status
-    || notif.data?.reclamation_status
-    || notif.data?.new_status
-    || null
-}
-
 const STATUS_MAP = {
-  // Soumis / en attente
-  submitted:   { label: 'Soumise',          color: 'blue',        icon: 'mdi-send-outline' },
-  pending:     { label: 'En attente',        color: 'orange',      icon: 'mdi-clock-outline' },
-  new:         { label: 'Nouvelle',          color: 'blue',        icon: 'mdi-bell-outline' },
-
-  // En cours
-  in_progress: { label: 'En cours',          color: 'primary',     icon: 'mdi-progress-clock' },
-  processing:  { label: 'En traitement',     color: 'primary',     icon: 'mdi-cog-outline' },
-  under_review:{ label: 'En révision',       color: 'purple',      icon: 'mdi-magnify' },
-  escalated:   { label: 'Escaladée',         color: 'deep-orange', icon: 'mdi-arrow-up-circle-outline' },
-  meeting_scheduled: { label: 'RDV planifié',color: 'purple',      icon: 'mdi-calendar-check-outline' },
-
-  // Terminé
-  resolved:    { label: 'Résolue',           color: 'success',     icon: 'mdi-check-circle-outline' },
-  approved:    { label: 'Approuvée',         color: 'success',     icon: 'mdi-check-decagram-outline' },
-  closed:      { label: 'Clôturée',          color: 'teal',        icon: 'mdi-lock-check-outline' },
-
-  // Rejeté / annulé
-  rejected:    { label: 'Rejetée',           color: 'error',       icon: 'mdi-close-circle-outline' },
-  cancelled:   { label: 'Annulée',           color: 'grey',        icon: 'mdi-cancel' },
-  invalid:     { label: 'Non recevable',     color: 'error',       icon: 'mdi-alert-circle-outline' },
-
-  // Note modifiée
-  note_updated:{ label: 'Note modifiée',     color: 'teal',        icon: 'mdi-pencil-circle-outline' },
+  submitted:         { label: 'Soumise',        color: 'blue',        hex: '#2563EB', icon: 'mdi-send-outline' },
+  pending:           { label: 'En attente',      color: 'orange',      hex: '#D97706', icon: 'mdi-clock-outline' },
+  new:               { label: 'Nouvelle',        color: 'blue',        hex: '#2563EB', icon: 'mdi-bell-outline' },
+  received:          { label: 'Reçue',           color: 'cyan',        hex: '#0891B2', icon: 'mdi-inbox-arrow-down' },
+  in_progress:       { label: 'En cours',        color: 'primary',     hex: '#4F46E5', icon: 'mdi-progress-clock' },
+  in_review:         { label: 'En révision',     color: 'purple',      hex: '#7C3AED', icon: 'mdi-magnify' },
+  processing:        { label: 'En traitement',   color: 'primary',     hex: '#4F46E5', icon: 'mdi-cog-outline' },
+  under_review:      { label: 'En révision',     color: 'purple',      hex: '#7C3AED', icon: 'mdi-magnify' },
+  escalated:         { label: 'Escaladée',       color: 'deep-orange', hex: '#EA580C', icon: 'mdi-arrow-up-circle-outline' },
+  meeting_scheduled: { label: 'RDV planifié',    color: 'purple',      hex: '#7C3AED', icon: 'mdi-calendar-check-outline' },
+  resolved:          { label: 'Résolue',         color: 'success',     hex: '#059669', icon: 'mdi-check-circle-outline' },
+  approved:          { label: 'Approuvée',       color: 'success',     hex: '#059669', icon: 'mdi-check-decagram-outline' },
+  closed:            { label: 'Clôturée',        color: 'teal',        hex: '#0F766E', icon: 'mdi-lock-check-outline' },
+  rejected:          { label: 'Rejetée',         color: 'error',       hex: '#DC2626', icon: 'mdi-close-circle-outline' },
+  cancelled:         { label: 'Annulée',         color: 'grey',        hex: '#64748B', icon: 'mdi-cancel' },
+  invalid:           { label: 'Non recevable',   color: 'error',       hex: '#DC2626', icon: 'mdi-alert-circle-outline' },
+  note_updated:      { label: 'Note modifiée',   color: 'teal',        hex: '#0F766E', icon: 'mdi-pencil-circle-outline' },
 }
 
-function statusLabel(status) {
-  if (!status) return ''
-  return STATUS_MAP[status]?.label ?? status.replace(/_/g, ' ')
-}
+function statusLabel(s) { return STATUS_MAP[s]?.label ?? (s ? s.replace(/_/g, ' ') : '') }
+function statusColor(s) { return STATUS_MAP[s]?.color ?? 'primary' }
+function statusHex(s)   { return STATUS_MAP[s]?.hex   ?? '#4F46E5' }
+function statusIcon(s)  { return STATUS_MAP[s]?.icon  ?? 'mdi-information-outline' }
 
-function statusColor(status) {
-  if (!status) return 'primary'
-  return STATUS_MAP[status]?.color ?? 'primary'
-}
-
-function statusIcon(status) {
-  if (!status) return 'mdi-information-outline'
-  return STATUS_MAP[status]?.icon ?? 'mdi-information-outline'
-}
-
-// ── Helpers type ──────────────────────────────────────────────────────
 function notifIcon(type) {
-  if (type?.includes('reclamation')) return 'mdi-file-document-outline'
-  if (type?.includes('status'))      return 'mdi-swap-horizontal'
-  if (type?.includes('meeting'))     return 'mdi-calendar-check-outline'
-  if (type?.includes('escalat'))     return 'mdi-arrow-up-circle-outline'
-  if (type?.includes('resolved'))    return 'mdi-check-circle-outline'
-  if (type?.includes('rejected'))    return 'mdi-close-circle-outline'
-  if (type?.includes('document'))    return 'mdi-paperclip'
+  const t = (type ?? '').toLowerCase()
+  if (t.includes('newreclam') || t.includes('new_reclam')) return 'mdi-file-plus-outline'
+  if (t.includes('reclam'))   return 'mdi-file-document-outline'
+  if (t.includes('status'))   return 'mdi-swap-horizontal'
+  if (t.includes('meeting'))  return 'mdi-calendar-check-outline'
+  if (t.includes('escalat'))  return 'mdi-arrow-up-circle-outline'
+  if (t.includes('resolv'))   return 'mdi-check-circle-outline'
+  if (t.includes('reject'))   return 'mdi-close-circle-outline'
+  if (t.includes('document')) return 'mdi-paperclip'
   return 'mdi-bell-outline'
 }
 
 function notifColor(type) {
-  if (type?.includes('resolved'))    return 'success'
-  if (type?.includes('rejected'))    return 'error'
-  if (type?.includes('escalat'))     return 'deep-orange'
-  if (type?.includes('meeting'))     return 'purple'
-  if (type?.includes('reclamation')) return 'primary'
-  if (type?.includes('document'))    return 'teal'
+  const t = (type ?? '').toLowerCase()
+  if (t.includes('resolv'))   return 'success'
+  if (t.includes('reject'))   return 'error'
+  if (t.includes('escalat'))  return 'deep-orange'
+  if (t.includes('meeting'))  return 'purple'
+  if (t.includes('reclam'))   return 'primary'
+  if (t.includes('document')) return 'teal'
   return 'blue-grey'
 }
 
 function notifBg(type) {
   const map = {
-    success:       'rgb(var(--v-theme-success), 0.12)',
-    error:         'rgb(var(--v-theme-error), 0.12)',
-    'deep-orange': 'rgb(var(--v-theme-deep-orange), 0.12)',
-    purple:        'rgb(var(--v-theme-purple), 0.12)',
-    primary:       'rgb(var(--v-theme-primary), 0.12)',
-    teal:          'rgb(var(--v-theme-teal), 0.12)',
-    'blue-grey':   'rgb(var(--v-theme-blue-grey), 0.12)',
+    success:       'rgba(5,150,105,0.12)',
+    error:         'rgba(220,38,38,0.12)',
+    'deep-orange': 'rgba(234,88,12,0.12)',
+    purple:        'rgba(124,58,237,0.12)',
+    primary:       'rgba(79,70,229,0.12)',
+    teal:          'rgba(15,118,110,0.12)',
+    'blue-grey':   'rgba(71,85,105,0.12)',
   }
-  return map[notifColor(type)] ?? 'rgb(var(--v-theme-surface-variant), 0.24)'
+  return map[notifColor(type)] ?? 'rgba(100,116,139,0.12)'
 }
 
 function notifTypeLabel(type) {
-  if (type?.includes('reclamation')) return 'Réclamation'
-  if (type?.includes('meeting'))     return 'RDV'
-  if (type?.includes('document'))    return 'Document'
-  if (type?.includes('system'))      return 'Système'
+  const t = (type ?? '').toLowerCase()
+  if (t.includes('reclam'))   return 'Réclamation'
+  if (t.includes('meeting'))  return 'RDV'
+  if (t.includes('document')) return 'Document'
+  if (t.includes('system'))   return 'Système'
   return 'Info'
 }
 
@@ -446,7 +447,7 @@ function dateLabel(dateStr) {
   const now     = new Date()
   const dDate   = new Date(d.getFullYear(), d.getMonth(), d.getDate())
   const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const diff    = Math.floor((nowDate - dDate) / 86400000)
+  const diff    = Math.floor((nowDate - dDate) / 86_400_000)
   if (diff === 0) return "Aujourd'hui"
   if (diff === 1) return 'Hier'
   if (diff < 7)   return `Il y a ${diff} jours`
@@ -457,7 +458,7 @@ function fmtTime(dateStr) {
   if (!dateStr) return ''
   const d    = new Date(dateStr)
   const now  = new Date()
-  const diff = Math.floor((now - d) / 60000)
+  const diff = Math.floor((now - d) / 60_000)
   if (diff < 1)    return "À l'instant"
   if (diff < 60)   return `Il y a ${diff} min`
   if (diff < 1440) return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(d)
@@ -468,7 +469,6 @@ function fmtTime(dateStr) {
 <style scoped>
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
-
 .surface-variant-bg { background-color: rgb(var(--v-theme-background)); }
 
 .notif-card {
@@ -481,39 +481,43 @@ function fmtTime(dateStr) {
   transform: translateY(-1px);
 }
 .notif-card--unread {
-  background-color: rgb(var(--v-theme-primary), 0.05) !important;
+  background-color: rgba(79,70,229,0.05) !important;
   border-left: 4px solid rgb(var(--v-theme-primary)) !important;
 }
 
 .notif-icon {
-  width: 40px; height: 40px;
-  border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 
 .notif-title {
   font-size: 0.88rem; font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 220px;
+  max-width: 200px;
+}
+
+.module-pill {
+  display: inline-flex; align-items: center;
+  background: rgba(79,70,229,0.08);
+  color: rgb(var(--v-theme-primary));
+  border-radius: 20px; padding: 2px 10px 2px 6px;
+  font-size: 0.75rem; font-weight: 600;
+  max-width: 100%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
 }
 
 .notif-message {
   font-size: 0.8rem; line-height: 1.5; margin: 0;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 
 .notif-time {
-  font-size: 0.72rem;
-  display: inline-flex; align-items: center;
+  font-size: 0.72rem; display: inline-flex; align-items: center;
 }
 
 .unread-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%; flex-shrink: 0;
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
 }
 
 .date-label {
@@ -522,18 +526,16 @@ function fmtTime(dateStr) {
   padding: 8px 4px 4px;
 }
 
-/* Badge statut : police légèrement plus grande pour lisibilité */
 .status-chip { font-size: 0.72rem !important; font-weight: 700 !important; }
 
-/* Ligne détail statut sous le message */
 .status-detail {
-  font-size: 0.75rem;
-  display: inline-flex; align-items: center;
-  font-weight: 500;
+  font-size: 0.75rem; display: inline-flex;
+  align-items: center; font-weight: 500;
 }
 
 @media (max-width: 600px) {
-  .notif-title   { max-width: 140px; font-size: 0.82rem; }
+  .notif-title   { max-width: 130px; font-size: 0.82rem; }
   .notif-message { -webkit-line-clamp: 1; }
+  .module-pill   { max-width: 160px; }
 }
 </style>
