@@ -300,6 +300,7 @@ const navItems = [
   { to: '/admin/reclamations', label: 'Réclamations',    icon: 'mdi-file-document-multiple' },
   { to: '/admin/students',     label: 'Étudiants',       icon: 'mdi-account-group' },
   { to: '/admin/semestres',    label: 'Semestres',       icon: 'mdi-calendar-multiple' },
+  { to: '/admin/resultats-pdf',label: 'Résultats PDF',   icon: 'mdi-file-pdf-box' },
   { to: '/admin/profile',      label: 'Mon profil',      icon: 'mdi-account-circle' },
 ]
 

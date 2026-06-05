@@ -247,4 +247,19 @@ class SemestreController extends Controller
             'data'    => $semestre,
         ]);
     }
+
+    public function modulesIndex(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
+{
+    $query = \Illuminate\Support\Facades\DB::table('modules')
+        ->where('is_active', true);
+
+    if ($request->semestre_id) {
+        $query->where('semestre_id', $request->semestre_id);
+    }
+
+    $modules = $query->orderBy('name')->get(['id', 'name', 'code']);
+
+    return response()->json(['success' => true, 'data' => $modules]);
+}
+
 }

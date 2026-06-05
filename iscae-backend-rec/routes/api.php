@@ -24,6 +24,8 @@ use App\Http\Controllers\API\Admin\DocumentController     as AdminDocument;
 use App\Http\Controllers\API\Admin\NotificationController as AdminNotification;
 use App\Http\Controllers\API\Admin\SettingController      as AdminSetting;
 use App\Http\Controllers\API\Admin\ProfileController      as AdminProfile;
+use App\Http\Controllers\API\Admin\AiAnalysisController;
+use App\Http\Controllers\API\Admin\ModuleResultPdfController;
 
 Route::prefix('v1')->group(function () {
 
@@ -141,15 +143,19 @@ Route::prefix('v1')->group(function () {
         Route::put ('reclamations/{id}/status',   [AdminReclamation::class, 'updateStatus']   )->name('reclamations.update-status');
         Route::post('reclamations/{id}/escalate', [AdminReclamation::class, 'escalate']       )->name('reclamations.escalate');
         Route::post('reclamations/{id}/meeting',  [AdminReclamation::class, 'scheduleMeeting'])->name('reclamations.meeting');
+        Route::post('reclamations/{id}/analyze',  [AiAnalysisController::class, 'analyze']    )->name('reclamations.analyze');
+        Route::post('reclamations/{id}/attachments', [AdminReclamation::class, 'uploadAttachment'])->name('reclamations.upload-attachment');
+        Route::get ('reclamations/{id}/analysis', [AiAnalysisController::class, 'show']       )->name('reclamations.analysis');
+        
 
         // ── Semestres ──────────────────────────────────────────────
-        Route::get   ('semestres',                        [AdminSemestre::class, 'index']           )->name('semestres.index');
-        Route::post  ('semestres',                        [AdminSemestre::class, 'store']           )->name('semestres.store');
-        Route::put   ('semestres/{id}',                   [AdminSemestre::class, 'update']          )->name('semestres.update');
-        Route::put   ('semestres/{id}/toggle',            [AdminSemestre::class, 'toggle']          )->name('semestres.toggle');
-        Route::put   ('semestres/{id}/toggle-exam',       [AdminSemestre::class, 'toggleExam']      )->name('semestres.toggle-exam');
-        Route::put   ('semestres/{id}/toggle-rattrapage', [AdminSemestre::class, 'toggleRattrapage'])->name('semestres.toggle-rattrapage');
-        Route::delete('semestres/{id}',                   [AdminSemestre::class, 'destroy']         )->name('semestres.destroy');
+        Route::get   ('semestres',                         [AdminSemestre::class, 'index']           )->name('semestres.index');
+        Route::post  ('semestres',                         [AdminSemestre::class, 'store']           )->name('semestres.store');
+        Route::put   ('semestres/{id}',                    [AdminSemestre::class, 'update']          )->name('semestres.update');
+        Route::put   ('semestres/{id}/toggle',             [AdminSemestre::class, 'toggle']          )->name('semestres.toggle');
+        Route::put   ('semestres/{id}/toggle-exam',        [AdminSemestre::class, 'toggleExam']      )->name('semestres.toggle-exam');
+        Route::put   ('semestres/{id}/toggle-rattrapage',  [AdminSemestre::class, 'toggleRattrapage'])->name('semestres.toggle-rattrapage');
+        Route::delete('semestres/{id}',                    [AdminSemestre::class, 'destroy']         )->name('semestres.destroy');
 
         // ── Modules ────────────────────────────────────────────────
         Route::get   ('modules',      [AdminSemestre::class, 'modulesIndex'] )->name('modules.index');
@@ -201,6 +207,11 @@ Route::prefix('v1')->group(function () {
             $filieres = DB::table('filieres')->orderBy('nom')->get();
             return response()->json(['success' => true, 'data' => $filieres]);
         })->name('filieres.index');
+
+
+        Route::get ('module-results',      [ModuleResultPdfController::class, 'index']);
+        Route::post('module-results',      [ModuleResultPdfController::class, 'store']);
+        Route::delete('module-results/{id}', [ModuleResultPdfController::class, 'destroy']);
 
     });
 
@@ -331,7 +342,24 @@ Route::prefix('v1')->group(function () {
         Route::put ('profile/password', [StudentProfile::class, 'updatePassword'])->name('profile.password');
 
         // ── Modules ────────────────────────────────────────────────
-        Route::get('modules', [StudentModule::class, 'index'])->name('modules.index');
+        // ── Modules ────────────────────────────────────────────────
+Route::get('modules', function (\Illuminate\Http\Request $request) {
+    $user    = $request->user();
+    $student = DB::table('students')->where('user_id', $user->id)->first();
+
+    $query = DB::table('modules')->where('is_active', true);
+
+    if ($request->semestre_id) {
+        $query->where('semestre_id', $request->semestre_id);
+    }
+
+    if ($student && $student->filiere_id) {
+        $query->where('filiere_id', $student->filiere_id);
+    }
+
+    $modules = $query->orderBy('name')->get(['id', 'name', 'code']);
+    return response()->json(['success' => true, 'data' => $modules]);
+})->name('modules.index');
 
         // ── Documents ──────────────────────────────────────────────
         Route::get('documents',      [StudentDocument::class, 'index'])->name('documents.index');

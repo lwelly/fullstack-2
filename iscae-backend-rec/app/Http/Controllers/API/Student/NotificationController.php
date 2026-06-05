@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\API\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\Notification;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class NotificationController extends Controller
@@ -14,62 +14,33 @@ class NotificationController extends Controller
     // ================================================================
     public function index(Request $request)
     {
-        // ── Identifier l'utilisateur ─────────────────────────────────
-        $userId = Auth::id();
-
-         $user          = $request->user();
-    $notifications = \App\Models\Notification::where('user_id', $user->id)
-        ->orderByDesc('created_at')
-        ->get()
-        ->map(fn($n) => [
-            'id'         => $n->id,
-            'title'      => $n->title,
-            'message'    => $n->message,
-            'type'       => $n->type,
-            'data'       => is_string($n->data) ? json_decode($n->data, true) : ($n->data ?? []),
-            'read_at'    => $n->read_at,
-            'created_at' => $n->created_at,
-        ]);
-
-    return response()->json(['success' => true, 'data' => $notifications]);
-
-        if (! $userId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Non authentifié — Auth::id() est null.',
-            ], 401);
+        $user = $request->user();
+        if (! $user) {
+            return response()->json(['success' => false, 'message' => 'Non authentifié.'], 401);
         }
 
-        // ── Requête principale ───────────────────────────────────────
-        $query = DB::table('notifications')
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at');
+        $query = Notification::forUser($user->id)->whereNull('deleted_at');
 
-        // Filtre lu/non-lu
+        // Filtre lu / non-lu
         if ($request->filled('read')) {
             $isRead = filter_var($request->read, FILTER_VALIDATE_BOOLEAN);
-            $query->where('is_read', $isRead ? 1 : 0);
+            $query->where('is_read', $isRead);
         }
 
         $total       = (clone $query)->count();
-        $unreadCount = DB::table('notifications')
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at')
-            ->where('is_read', 0)
-            ->count();
+        $unreadCount = (clone $query)->where('is_read', false)->count();
 
         $perPage     = min((int) $request->get('per_page', 15), 50);
         $currentPage = max((int) $request->get('page', 1), 1);
-        $offset      = ($currentPage - 1) * $perPage;
         $lastPage    = $total > 0 ? (int) ceil($total / $perPage) : 1;
 
         $rows = (clone $query)
-            ->orderBy('created_at', 'desc')
-            ->offset($offset)
-            ->limit($perPage)
+            ->orderByDesc('created_at')
+            ->skip(($currentPage - 1) * $perPage)
+            ->take($perPage)
             ->get();
 
-        $items = $rows->map(fn($row) => $this->normalize($row))->values();
+        $items = $rows->map(fn($n) => $this->normalize($n))->values();
 
         return response()->json([
             'success' => true,
@@ -87,23 +58,21 @@ class NotificationController extends Controller
     // ================================================================
     // GET /api/v1/student/notifications/counts
     // ================================================================
-    public function counts()
+    public function counts(Request $request)
     {
-        $userId = Auth::id();
-        if (! $userId) {
+        $user = $request->user();
+        if (! $user) {
             return response()->json(['success' => false, 'message' => 'Non authentifié.'], 401);
         }
 
-        $base = DB::table('notifications')
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at');
+        $base = Notification::forUser($user->id)->whereNull('deleted_at');
 
         return response()->json([
             'success' => true,
             'data'    => [
                 'total'  => (clone $base)->count(),
-                'unread' => (clone $base)->where('is_read', 0)->count(),
-                'read'   => (clone $base)->where('is_read', 1)->count(),
+                'unread' => (clone $base)->where('is_read', false)->count(),
+                'read'   => (clone $base)->where('is_read', true)->count(),
             ],
         ]);
     }
@@ -111,18 +80,17 @@ class NotificationController extends Controller
     // ================================================================
     // PUT /api/v1/student/notifications/read-all
     // ================================================================
-    public function markAllRead()
+    public function markAllRead(Request $request)
     {
-        $userId = Auth::id();
-        if (! $userId) {
+        $user = $request->user();
+        if (! $user) {
             return response()->json(['success' => false, 'message' => 'Non authentifié.'], 401);
         }
 
-        $count = DB::table('notifications')
-            ->where('user_id', $userId)
+        $count = Notification::forUser($user->id)
             ->whereNull('deleted_at')
-            ->where('is_read', 0)
-            ->update(['is_read' => 1, 'read_at' => now()]);
+            ->where('is_read', false)
+            ->update(['is_read' => true, 'read_at' => now()]);
 
         return response()->json([
             'success' => true,
@@ -134,73 +102,142 @@ class NotificationController extends Controller
     // ================================================================
     // PUT /api/v1/student/notifications/{id}/read
     // ================================================================
-    public function markAsRead(string $id)
+    public function markAsRead(Request $request, string $id)
     {
-        $userId = Auth::id();
-        if (! $userId) {
+        $user = $request->user();
+        if (! $user) {
             return response()->json(['success' => false, 'message' => 'Non authentifié.'], 401);
         }
 
-        $updated = DB::table('notifications')
-            ->where('id', $id)
-            ->where('user_id', $userId)
+        $notif = Notification::forUser($user->id)
             ->whereNull('deleted_at')
-            ->update(['is_read' => 1, 'read_at' => now()]);
+            ->find($id);
 
-        return response()->json([
-            'success' => (bool) $updated,
-            'message' => $updated ? 'Notification marquée comme lue.' : 'Introuvable.',
-        ], $updated ? 200 : 404);
+        if (! $notif) {
+            return response()->json(['success' => false, 'message' => 'Introuvable.'], 404);
+        }
+
+        $notif->markAsRead();
+
+        return response()->json(['success' => true, 'message' => 'Notification marquée comme lue.']);
     }
 
     // ================================================================
     // DELETE /api/v1/student/notifications/{id}
     // ================================================================
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        $userId = Auth::id();
-        if (! $userId) {
+        $user = $request->user();
+        if (! $user) {
             return response()->json(['success' => false, 'message' => 'Non authentifié.'], 401);
         }
 
-        $deleted = DB::table('notifications')
-            ->where('id', $id)
-            ->where('user_id', $userId)
-            ->update(['deleted_at' => now()]);
+        $notif = Notification::forUser($user->id)
+            ->whereNull('deleted_at')
+            ->find($id);
 
-        return response()->json([
-            'success' => (bool) $deleted,
-            'message' => $deleted ? 'Notification supprimée.' : 'Introuvable.',
-        ], $deleted ? 200 : 404);
+        if (! $notif) {
+            return response()->json(['success' => false, 'message' => 'Introuvable.'], 404);
+        }
+
+        $notif->delete(); // SoftDeletes → remplit deleted_at
+
+        return response()->json(['success' => true, 'message' => 'Notification supprimée.']);
     }
 
     // ================================================================
-    // Helper privé : normaliser une ligne DB
+    // Helper : normaliser un Model Notification
     // ================================================================
-    private function normalize(object $row): array
+    private function normalize(Notification $n): array
     {
-        $arr  = (array) $row;
-        $data = [];
+        // data est déjà casté en array grâce au Model
+        $data = is_array($n->data) ? $n->data : [];
 
-        if (! empty($arr['data'])) {
-            $decoded = json_decode($arr['data'], true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $data = $decoded ?? [];
+        $reclamationId = $data['reclamation_id'] ?? null;
+
+        // ── Statut ───────────────────────────────────────────────────
+        $status = $data['status']
+            ?? $data['reclamation_status']
+            ?? $data['new_status']
+            ?? null;
+
+        // ── Nom du module ────────────────────────────────────────────
+        // 1. Directement dans data (envoyé par toArray() de la Notification)
+        $moduleName = $data['module']
+            ?? $data['module_name']
+            ?? $data['module_nom']
+            ?? null;
+
+        // 2. Sinon jointure via reclamation_id
+        if (! $moduleName && $reclamationId) {
+            $rec = DB::table('reclamations')
+                ->leftJoin('modules', 'modules.id', '=', 'reclamations.module_id')
+                ->where('reclamations.id', $reclamationId)
+                ->select(
+                    'modules.nom  as module_nom',
+                    'modules.name as module_name',
+                    'modules.code as module_code',
+                )
+                ->first();
+
+            if ($rec) {
+                $moduleName = $rec->module_nom
+                    ?? $rec->module_name
+                    ?? ($rec->module_code ? "Module {$rec->module_code}" : null);
             }
         }
 
+        // ── Type lisible (class basename si FQCN) ───────────────────
+        $type = $n->type ?? '';
+        if (str_contains($type, '\\')) {
+            $type = class_basename($type);
+        }
+        // Fusionner avec data['type'] si plus lisible
+        $type = $data['type'] ?? $type;
+
+        // ── Titre lisible ────────────────────────────────────────────
+        $title = $n->title
+            ?? $data['title']
+            ?? $this->buildTitle($type, $moduleName);
+
+        // ── Message ──────────────────────────────────────────────────
+        $message = $n->body
+            ?? $data['message']
+            ?? $data['body']
+            ?? '';
+
         return [
-            'id'             => $arr['id'],
-            'type'           => $arr['type']    ?? null,
-            'title'          => $arr['title']   ?? $data['title']   ?? 'Notification',
-            'body'           => $arr['body']    ?? $data['message'] ?? $data['body'] ?? '',
-            'is_read'        => (bool) ($arr['is_read'] ?? false),
-            'read_at'        => $arr['read_at'] ?? null,
-            'channel'        => $arr['channel'] ?? 'in_app',
+            'id'             => $n->id,
+            'type'           => $type,
+            'title'          => $title,
+            'message'        => $message,
+            'status'         => $status,
+            'module_name'    => $moduleName,
+            'reclamation_id' => $reclamationId,
+            'reference'      => $data['reference_number'] ?? null,
+            'is_read'        => (bool) $n->is_read,
+            'read_at'        => $n->read_at,
             'data'           => $data,
-            'reclamation_id' => $data['reclamation_id'] ?? null,
-            'sent_at'        => $arr['sent_at']    ?? $arr['created_at'] ?? null,
-            'created_at'     => $arr['created_at'] ?? null,
+            'created_at'     => $n->created_at,
         ];
+    }
+
+    // ── Construit un titre si absent ─────────────────────────────────
+    private function buildTitle(string $type, ?string $moduleName): string
+    {
+        $t = strtolower($type);
+        $m = $moduleName ? " — {$moduleName}" : '';
+
+        return match (true) {
+            str_contains($t, 'newreclam')     => "Réclamation soumise{$m}",
+            str_contains($t, 'statuschange')  => "Statut mis à jour{$m}",
+            str_contains($t, 'escalat')       => "Réclamation escaladée{$m}",
+            str_contains($t, 'resolv')        => "Réclamation résolue{$m}",
+            str_contains($t, 'reject')        => "Réclamation rejetée{$m}",
+            str_contains($t, 'meeting')       => "Réunion planifiée{$m}",
+            str_contains($t, 'new_reclam')    => "Réclamation soumise{$m}",
+            str_contains($t, 'reclam')        => "Réclamation{$m}",
+            default                           => 'Notification',
+        };
     }
 }

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+
 // ── Auth Views ──────────────────────────────────────────────────────────
 const LoginView           = () => import('@/views/auth/LoginView.vue')
 const TwoFactorView       = () => import('@/views/auth/TwoFactorView.vue')
@@ -19,6 +20,7 @@ const AdminReclamationDetail = () => import('@/views/admin/ReclamationDetailView
 const AdminSemestres         = () => import('@/views/admin/SemestresView.vue')
 const AdminSettings          = () => import('@/views/admin/SettingsView.vue')
 const AdminProfile           = () => import('@/views/admin/ProfileView.vue')
+const AdminResultatsPdf      = () => import('@/views/admin/ResultatsPdfView.vue')
 
 // ── Student Views ────────────────────────────────────────────────────────
 const StudentDashboard         = () => import('@/views/student/DashboardView.vue')
@@ -74,6 +76,7 @@ const routes = [
       { path: 'semestres',         name: 'admin.semestres',          component: AdminSemestres },
       { path: 'settings',          name: 'admin.settings',           component: AdminSettings },
       { path: 'profile',           name: 'admin.profile',            component: AdminProfile },
+      { path: 'resultats-pdf',     name: 'admin.resultats-pdf',      component: AdminResultatsPdf },
     ],
   },
 

@@ -14,9 +14,9 @@ class ModuleController extends Controller
         $user    = Auth::user();
         $student = DB::table('students')
             ->where('user_id', $user->id)
+            ->whereNull('deleted_at')
             ->first();
 
-        // Récupérer le semestre_id depuis la requête
         $semestreId = $request->input('semestre_id');
 
         if (!$semestreId) {
@@ -31,27 +31,24 @@ class ModuleController extends Controller
             ->where('semestre_id', $semestreId)
             ->where('is_active', true);
 
-        // Filtrer par filière de l'étudiant si disponible
         if ($student && $student->filiere_id) {
             $query->where('filiere_id', $student->filiere_id);
         }
 
         $modules = $query
-            ->select(
-                'id',
-                'name',
-                'code',
-                'semestre_id',
-                'filiere_id',
-                'coefficient',
-                'credits'
-            )
+            ->select('id', 'name', 'code', 'semestre_id', 'filiere_id', 'coefficient', 'credits')
             ->orderBy('name')
             ->get();
 
         return response()->json([
             'success' => true,
             'data'    => $modules,
+            'debug'   => [
+                'student_id'  => $student?->id,
+                'filiere_id'  => $student?->filiere_id,
+                'semestre_id' => $semestreId,
+                'count'       => $modules->count(),
+            ],
         ]);
     }
 }

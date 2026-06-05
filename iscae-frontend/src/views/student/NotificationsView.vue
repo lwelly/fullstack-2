@@ -79,7 +79,7 @@
 
             <div class="flex-grow-1" style="min-width:0;">
 
-              <!-- ✅ Titre : nom matière extrait du titre OU référence -->
+              <!-- Titre : nom de matière extrait du cache réclamations -->
               <div class="d-flex align-center justify-space-between gap-2 mb-1">
                 <span class="notif-title text-high-emphasis">
                   {{ extractModuleName(notif) }}
@@ -100,7 +100,7 @@
                 </div>
               </div>
 
-              <!-- ✅ Pill : référence extraite de data.reference ou du titre -->
+              <!-- Pill : référence extraite de data.reference ou du titre -->
               <div v-if="extractReference(notif)" class="module-pill mb-2">
                 <v-icon size="13" color="primary" class="mr-1">mdi-pound</v-icon>
                 <span>{{ extractReference(notif) }}</span>
@@ -175,41 +175,55 @@ import api from '@/api/axios'
 
 const router = useRouter()
 
-const notifications   = ref([])
-const loading         = ref(true)
-const markingAll      = ref(false)
-const clearingAll     = ref(false)
-const confirmClearAll = ref(false)
-const activeTab       = ref('all')
-const page            = ref(1)
-const PER_PAGE        = 15
+const notifications    = ref([])
+const loading          = ref(true)
+const markingAll       = ref(false)
+const clearingAll      = ref(false)
+const confirmClearAll  = ref(false)
+const activeTab        = ref('all')
+const page             = ref(1)
+const PER_PAGE         = 15
 
-// ✅ Extrait le nom de matière depuis le titre (ex: "Réclamation #RECL-2026-000020 — Statut mis à jour")
-// Retourne la référence formatée proprement : "RECL-2026-000020"
+// ✅ Cache : référence → nom de matière  (ex: "RECL-2026-000020" → "Architecture des Ordinateurs")
+const reclamationsMap = ref({})
+
+// ---------------------------------------------------------------------------
+// Extraction référence & nom de matière
+// ---------------------------------------------------------------------------
+
 function extractReference(notif) {
-  // 1. Depuis data.reference (champ direct)
   if (notif.data?.reference) return notif.data.reference
 
-  // 2. Depuis le titre via regex
   const match = (notif.title ?? '').match(/#?(RECL-[\d-]+)/)
   if (match) return match[1]
 
-  // 3. Depuis le message
   const matchMsg = (notif.message ?? '').match(/#?(RECL-[\d-]+)/)
   if (matchMsg) return matchMsg[1]
 
   return null
 }
 
-// ✅ Titre affiché : module_name si dispo, sinon référence, sinon titre original
+// ✅ Affiche le nom de matière en priorité, sinon référence, sinon titre
 function extractModuleName(notif) {
+  // 1. Champ direct envoyé par le backend (si disponible)
   if (notif.module_name) return notif.module_name
 
+  // 2. Chercher dans le cache réclamations via la référence
   const ref = extractReference(notif)
+  if (ref && reclamationsMap.value[ref]) {
+    return reclamationsMap.value[ref]
+  }
+
+  // 3. Fallback : référence brute
   if (ref) return ref
 
+  // 4. Dernier recours : titre original
   return notif.title ?? 'Notification'
 }
+
+// ---------------------------------------------------------------------------
+// Tabs
+// ---------------------------------------------------------------------------
 
 function isReclamationType(type) {
   if (!type) return false
@@ -224,14 +238,18 @@ function isReclamationType(type) {
 }
 
 const tabs = computed(() => [
-  { value: 'all',         label: 'Toutes',        count: notifications.value.length },
-  { value: 'unread',      label: 'Non lues',       count: notifications.value.filter(n => !n.read_at && !n.is_read).length },
-  { value: 'reclamation', label: 'Réclamations',   count: notifications.value.filter(n => isReclamationType(n.type)).length },
+  { value: 'all',         label: 'Toutes',       count: notifications.value.length },
+  { value: 'unread',      label: 'Non lues',      count: notifications.value.filter(n => !n.read_at && !n.is_read).length },
+  { value: 'reclamation', label: 'Réclamations',  count: notifications.value.filter(n => isReclamationType(n.type)).length },
 ])
 
 const unreadCount = computed(() =>
   notifications.value.filter(n => !n.read_at && !n.is_read).length
 )
+
+// ---------------------------------------------------------------------------
+// Filtrage & pagination
+// ---------------------------------------------------------------------------
 
 const filteredList = computed(() => {
   if (activeTab.value === 'unread')
@@ -258,7 +276,14 @@ const groupedList = computed(() => {
   return Object.entries(groups).map(([date, items]) => ({ date, items }))
 })
 
-onMounted(loadNotifications)
+// ---------------------------------------------------------------------------
+// Chargement
+// ---------------------------------------------------------------------------
+
+// ✅ Les deux appels en parallèle pour éviter d'attendre inutilement
+onMounted(async () => {
+  await Promise.all([loadNotifications(), loadReclamations()])
+})
 
 async function loadNotifications() {
   loading.value = true
@@ -272,6 +297,29 @@ async function loadNotifications() {
     loading.value = false
   }
 }
+
+// ✅ Charge toutes les réclamations et construit le cache référence → module.name
+async function loadReclamations() {
+  try {
+    const res = await api.get('/student/reclamations')
+    const list = res.data?.data ?? res.data ?? []
+    list.forEach(r => {
+      if (r.reference_number && r.module?.name) {
+        reclamationsMap.value[r.reference_number] = r.module.name
+      }
+      // Aussi indexer par r.reference au cas où les deux champs diffèrent
+      if (r.reference && r.module?.name && r.reference !== r.reference_number) {
+        reclamationsMap.value[r.reference] = r.module.name
+      }
+    })
+  } catch (e) {
+    console.error('[Notifications] Erreur chargement réclamations:', e)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------
 
 async function markRead(notif) {
   notif._loading = true
@@ -332,28 +380,23 @@ async function handleClick(notif) {
   const type = (notif.type ?? '').toLowerCase()
 
   if (isReclamationType(type)) {
-    // 1. ID direct (si backend corrigé)
     const rid = notif.reclamation_id ?? data.reclamation_id ?? null
     if (rid) {
       router.push({ name: 'student.reclamation.detail', params: { id: rid } })
       return
     }
 
-    // 2. ✅ Cherche via la référence unique de CETTE notification
     const ref = data.reference ?? data.reference_number ?? null
 
     if (ref) {
       try {
         const res = await api.get('/student/reclamations')
         const list = res.data?.data ?? res.data ?? []
-
-        // ✅ Trouve la réclamation dont reference_number correspond à CETTE référence
         const found = list.find(r =>
           r.reference_number === ref ||
           r.reference_number === `RECL-${ref}` ||
           ref.includes(r.reference_number)
         )
-
         if (found?.id) {
           router.push({ name: 'student.reclamation.detail', params: { id: found.id } })
           return
@@ -363,13 +406,17 @@ async function handleClick(notif) {
       }
     }
 
-    // 3. Fallback
     router.push({ name: 'student.reclamations' })
     return
   }
 
   router.push({ name: 'student.dashboard' })
 }
+
+// ---------------------------------------------------------------------------
+// Helpers status
+// ---------------------------------------------------------------------------
+
 const STATUS_MAP = {
   submitted:         { label: 'Soumise',        color: 'blue',        hex: '#2563EB', icon: 'mdi-send-outline' },
   pending:           { label: 'En attente',      color: 'orange',      hex: '#D97706', icon: 'mdi-clock-outline' },
@@ -394,6 +441,10 @@ function statusLabel(s) { return STATUS_MAP[s]?.label ?? (s ? s.replace(/_/g, ' 
 function statusColor(s) { return STATUS_MAP[s]?.color ?? 'primary' }
 function statusHex(s)   { return STATUS_MAP[s]?.hex   ?? '#4F46E5' }
 function statusIcon(s)  { return STATUS_MAP[s]?.icon  ?? 'mdi-information-outline' }
+
+// ---------------------------------------------------------------------------
+// Helpers notification
+// ---------------------------------------------------------------------------
 
 function notifIcon(type) {
   const t = (type ?? '').toLowerCase()
@@ -440,6 +491,10 @@ function notifTypeLabel(type) {
   if (t.includes('system'))   return 'Système'
   return 'Info'
 }
+
+// ---------------------------------------------------------------------------
+// Helpers date / heure
+// ---------------------------------------------------------------------------
 
 function dateLabel(dateStr) {
   if (!dateStr) return 'Date inconnue'

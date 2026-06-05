@@ -343,4 +343,43 @@ class ReclamationController extends Controller
 
         return $data;
     }
+            public function uploadAttachment(Request $request, int $id): JsonResponse
+    {
+        $reclamation = \App\Models\Reclamation::findOrFail($id);
+
+        $request->validate([
+            'attachment' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+        ]);
+
+        $file       = $request->file('attachment');
+        $storedName = \Illuminate\Support\Str::uuid() . '.pdf';
+        $path       = $file->storeAs('reclamations/attachments', $storedName, 'public');
+
+        $attachment = \App\Models\ReclamationAttachment::create([
+    'reclamation_id' => $reclamation->id,
+    'uploaded_by'    => auth()->id(),
+    'original_name'  => $file->getClientOriginalName(),
+    'stored_name'    => $storedName,
+    'file_path'      => $path,
+    'mime_type'      => 'application/pdf',
+    'file_size'      => $file->getSize(),
+    'disk'           => 'public',
+    'is_scanned'     => false,
+    'is_safe'        => true,
+]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pièce jointe uploadée avec succès.',
+            'data'    => [
+                'id'            => $attachment->id,
+                'original_name' => $attachment->original_name,
+                'mime_type'     => $attachment->mime_type,
+            ],
+        ]);
+    }
+                    
+
+
+
 }

@@ -10,15 +10,21 @@ class ReclamationAttachment extends Model
 {
     protected $table = 'reclamation_attachments';
 
+    public $timestamps = false;
+
     protected $fillable = [
         'reclamation_id',
+        'uploaded_by',
         'original_name',
         'stored_name',
-        'storage_path',
+        'file_path',
         'mime_type',
         'file_size',
+        'disk',
         'is_scanned',
+        'scanned_at',
         'is_safe',
+        'created_at',
     ];
 
     protected function casts(): array

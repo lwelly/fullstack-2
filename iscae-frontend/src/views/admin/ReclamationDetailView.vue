@@ -1,7 +1,6 @@
 <template>
   <div class="detail-page">
 
-    <!-- ── En-tête ── -->
     <div class="d-flex align-center gap-3 mb-5">
       <v-btn
         icon="mdi-arrow-left"
@@ -17,13 +16,11 @@
       </div>
     </div>
 
-    <!-- ── Loading ── -->
     <div v-if="loading" class="py-10 text-center">
       <v-progress-circular indeterminate color="#0F2D5E" size="32" />
       <p style="font-size:13px;color:#6B7280;margin-top:12px">Chargement…</p>
     </div>
 
-    <!-- ── Erreur ── -->
     <v-alert
       v-else-if="error"
       type="error"
@@ -37,14 +34,11 @@
       </v-btn>
     </v-alert>
 
-    <!-- ── Contenu ── -->
     <template v-else-if="rec">
       <v-row>
 
-        <!-- ════ Colonne principale ════ -->
         <v-col cols="12" md="8">
 
-          <!-- Informations générales -->
           <div class="card mb-4">
             <div class="card-head">
               <span class="card-title">Informations générales</span>
@@ -127,7 +121,6 @@
             </div>
           </div>
 
-          <!-- Justification -->
           <div class="card mb-4">
             <div class="card-head">
               <span class="card-title">Justification de la réclamation</span>
@@ -139,7 +132,6 @@
             </div>
           </div>
 
-          <!-- Réponse admin -->
           <div v-if="rec.admin_response" class="card mb-4">
             <div class="card-head">
               <span class="card-title">Réponse de l'administration</span>
@@ -149,7 +141,6 @@
             </div>
           </div>
 
-          <!-- Pièces jointes -->
           <div v-if="rec.attachments?.length" class="card mb-4">
             <div class="card-head">
               <span class="card-title">Pièces jointes</span>
@@ -170,7 +161,12 @@
             </div>
           </div>
 
-          <!-- Historique -->
+          <AiAnalysisPanel
+            :reclamation-id="rec.id"
+            :attachments="rec.attachments ?? []"
+            class="mb-4"
+          />
+
           <div v-if="rec.history?.length" class="card mb-4">
             <div class="card-head">
               <span class="card-title">Historique des statuts</span>
@@ -213,10 +209,8 @@
 
         </v-col>
 
-        <!-- ════ Colonne droite ════ -->
         <v-col cols="12" md="4">
 
-          <!-- ── Étudiant ── -->
           <div class="card mb-4">
             <div class="card-head">
               <v-icon size="16" color="#0F2D5E" class="mr-1">
@@ -226,7 +220,6 @@
             </div>
             <div class="card-body">
 
-              <!-- Avatar + nom -->
               <div class="d-flex align-center gap-3 mb-4">
                 <v-avatar
                   size="48"
@@ -255,7 +248,6 @@
                 </div>
               </div>
 
-              <!-- Détails -->
               <div class="detail-row">
                 <span class="detail-key">Email</span>
                 <span class="detail-val">
@@ -263,7 +255,6 @@
                 </span>
               </div>
 
-              <!-- ✅ Filière corrigée -->
               <div class="detail-row">
                 <span class="detail-key">Filière</span>
                 <span class="detail-val">
@@ -274,7 +265,6 @@
                 </span>
               </div>
 
-              <!-- ✅ Niveau corrigé -->
               <div class="detail-row">
                 <span class="detail-key">Niveau</span>
                 <span class="detail-val">
@@ -288,7 +278,6 @@
             </div>
           </div>
 
-          <!-- ── Traitement ── -->
           <div class="card mb-4">
             <div class="card-head">
               <v-icon size="16" color="#0F2D5E" class="mr-1">
@@ -353,7 +342,6 @@
       </v-row>
     </template>
 
-    <!-- ── Snackbar ── -->
     <v-snackbar
       v-model="snack.show"
       :color="snack.color"
@@ -373,6 +361,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api/axios'
+import AiAnalysisPanel from '@/components/admin/AiAnalysisPanel.vue'
 
 const route = useRoute()
 
@@ -523,7 +512,7 @@ async function updateStatus() {
     })
     notify('Statut mis à jour avec succès ✅')
     adminComment.value = ''
-    await load()                          // recharge toutes les données
+    await load()                                  // recharge toutes les données
   } catch (err) {
     notify(
       err.response?.data?.message ?? 'Erreur lors de la mise à jour.',

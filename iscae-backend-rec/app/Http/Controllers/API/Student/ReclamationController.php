@@ -352,186 +352,189 @@ private function loadAttachments(int $reclamationId): array
     // ══════════════════════════════════════════════════════════════════
     // POST /api/v1/student/reclamations
     // ══════════════════════════════════════════════════════════════════
-    public function store(Request $request): JsonResponse
-    {
-        $student = $this->getStudent();
-
-        if (! $student) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Étudiant introuvable.',
-            ], 404);
-        }
-
-        // ── Validation ─────────────────────────────────────────────────
-        $validator = Validator::make($request->all(), [
-            'semestre_id'   => 'required|integer|exists:semestres,id',
-            'module_id'     => 'required|integer|exists:modules,id',
-            'type'          => 'required|in:cc,examen,rattrapage',
-            'note_actuelle' => 'required|numeric|min:0|max:20',
-            'note_reclamee' => 'nullable|numeric|min:0|max:20',
-            'justification' => 'required|string|min:10|max:2000',
-            'document'      => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur de validation.',
-                'errors'  => $validator->errors(),
-            ], 422);
-        }
-
-        // ── Note réclamée obligatoire pour CC ──────────────────────────
-        if ($request->type === 'cc' && is_null($request->note_reclamee)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'La note réclamée est obligatoire pour un Contrôle Continu.',
-                'errors'  => ['note_reclamee' => ['Champ obligatoire pour un CC.']],
-            ], 422);
-        }
-
-        // ── Vérifier que le semestre est ouvert ────────────────────────
-        $semestre = DB::table('semestres')
-            ->where('id', $request->semestre_id)
-            ->whereNull('deleted_at')
-            ->first();
-
-        if (! $semestre) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Semestre introuvable.',
-            ], 404);
-        }
-
-        $openFlag = match ($request->type) {
-            'cc'         => (bool) $semestre->is_open,
-            'examen'     => (bool) $semestre->is_exam_open,
-            'rattrapage' => (bool) $semestre->is_rattrapage_open,
-            default      => false,
-        };
-
-        if (! $openFlag) {
-            $typeLabel = match ($request->type) {
-                'cc'         => 'Contrôle Continu',
-                'examen'     => 'Examen',
-                'rattrapage' => 'Rattrapage',
-                default      => $request->type,
-            };
-            return response()->json([
-                'success' => false,
-                'message' => "Les réclamations de type « {$typeLabel} » ne sont pas ouvertes pour ce semestre.",
-            ], 422);
-        }
-
-        // ── Vérifier doublon actif ─────────────────────────────────────
-        $dbType   = $this->mapTypeToDb($request->type);
-        $existing = DB::table('reclamations')
-            ->where('student_id',  $student->id)
-            ->where('module_id',   $request->module_id)
-            ->where('semestre_id', $request->semestre_id)
-            ->where('type',        $dbType)
-            ->whereNotIn('status', ['resolved', 'rejected'])
-            ->whereNull('deleted_at')
-            ->exists();
-
-        if ($existing) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vous avez déjà une réclamation active pour ce module et ce type.',
-            ], 409);
-        }
-
-        // ── Référence unique ───────────────────────────────────────────
-        $year      = date('Y');
-        $count     = DB::table('reclamations')->whereYear('created_at', $year)->count() + 1;
-        $reference = 'RECL-' . $year . '-' . str_pad($count, 6, '0', STR_PAD_LEFT);
-
-        // ── Transaction ────────────────────────────────────────────────
-        DB::beginTransaction();
-        try {
-            // 1. Insérer la réclamation
-            $reclamationId = DB::table('reclamations')->insertGetId([
-                'reference_number' => $reference,
-                'student_id'       => $student->id,
-                'module_id'        => $request->module_id,
-                'semestre_id'      => $request->semestre_id,
-                'academic_year'    => $student->academic_year
-                                        ?? ($year . '-' . ($year + 1)),
-                'type'             => $dbType,
-                'note_actuelle'    => $request->note_actuelle,
-                'note_reclamee'    => $request->type === 'cc'
-                                        ? $request->note_reclamee
-                                        : null,
-                'justification'    => $request->justification,
-                'status'           => 'submitted',
-                'is_escalated'     => 0,
-                'created_at'       => Carbon::now(),
-                'updated_at'       => Carbon::now(),
-            ]);
-
-            // 2. Historique initial
-            DB::table('reclamation_history')->insert([
-                'reclamation_id' => $reclamationId,
-                'old_status'     => null,
-                'new_status'     => 'submitted',
-                'comment'        => "Réclamation soumise par l'étudiant.",
-                'changed_by'     => Auth::id(),   // ← user_id (pas student_id)
-                'ip_address'     => $request->ip(),
-                'created_at'     => Carbon::now(),
-                'updated_at'     => Carbon::now(),
-            ]);
-
-            // 3. Pièce jointe optionnelle
-            if ($request->hasFile('document') && $request->file('document')->isValid()) {
-                $file        = $request->file('document');
-                $storedName  = uniqid() . '_' . time() . '.' . $file->getClientOriginalExtension();
-                $storagePath = $file->storeAs('reclamations/attachments', $storedName, 'public');
-
-                DB::table('reclamation_attachments')->insert([
-                    'reclamation_id' => $reclamationId,
-                    'original_name'  => $file->getClientOriginalName(),
-                    'stored_name'    => $storedName,
-                    'storage_path'   => $storagePath,
-                    'mime_type'      => $file->getMimeType(),
-                    'file_size'      => $file->getSize(),
-                    'is_scanned'     => 0,
-                    'is_safe'        => 1,
-                    'created_at'     => Carbon::now(),
-                    'updated_at'     => Carbon::now(),
-                ]);
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Réclamation soumise avec succès.',
-                'data'    => [
-                    'id'               => $reclamationId,
-                    'reference_number' => $reference,
-                    'reference'        => $reference,
-                ],
-            ], 201);
-
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            Log::error('[ReclamationStore] Erreur: ' . $e->getMessage(), [
-                'student_id'  => $student->id,
-                'module_id'   => $request->module_id,
-                'semestre_id' => $request->semestre_id,
-                'type'        => $request->type,
-                'trace'       => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => app()->isLocal()
-                    ? 'Erreur : ' . $e->getMessage()
-                    : 'Une erreur est survenue lors de la soumission.',
-            ], 500);
-        }
+    
+public function store(Request $request): JsonResponse
+{
+    $student = $this->getStudent();
+ 
+    if (! $student) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Étudiant introuvable.',
+        ], 404);
     }
-
+ 
+    // ── Validation ─────────────────────────────────────────────────
+    $validator = Validator::make($request->all(), [
+        'semestre_id'   => 'required|integer|exists:semestres,id',
+        'module_id'     => 'required|integer|exists:modules,id',
+        'type'          => 'required|in:cc,controle,examen,rattrapage',
+        'note_actuelle' => 'required|numeric|min:0|max:20',
+        'note_reclamee' => 'nullable|numeric|min:0|max:20',
+        'justification' => 'required|string|min:10|max:2000',
+        'document'      => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+    ]);
+ 
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur de validation.',
+            'errors'  => $validator->errors(),
+        ], 422);
+    }
+ 
+    // ── Vérifier que le semestre est ouvert ────────────────────────
+    $semestre = DB::table('semestres')
+        ->where('id', $request->semestre_id)
+        ->first();
+ 
+    if (! $semestre) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Semestre introuvable.',
+        ], 404);
+    }
+ 
+    $dbType = $this->mapTypeToDb($request->type);
+ 
+    $openFlag = match ($dbType) {
+        'controle'   => (bool) $semestre->is_open,
+        'examen'     => (bool) $semestre->is_exam_open,
+        'rattrapage' => (bool) $semestre->is_rattrapage_open,
+        default      => false,
+    };
+ 
+    if (! $openFlag) {
+        $typeLabel = match ($dbType) {
+            'controle'   => 'Contrôle Continu',
+            'examen'     => 'Examen',
+            'rattrapage' => 'Rattrapage',
+            default      => $dbType,
+        };
+        return response()->json([
+            'success' => false,
+            'message' => "Les réclamations de type « {$typeLabel} » ne sont pas ouvertes pour ce semestre.",
+        ], 422);
+    }
+ 
+    // ── Vérifier doublon actif uniquement (pas resolved/rejected) ──
+    $existing = DB::table('reclamations')
+        ->where('student_id',  $student->id)
+        ->where('module_id',   $request->module_id)
+        ->where('semestre_id', $request->semestre_id)
+        ->where('type',        $dbType)
+        ->where('academic_year', $student->academic_year ?? (date('Y') . '-' . (date('Y') + 1)))
+        ->whereNotIn('status', ['resolved', 'rejected'])
+        ->whereNull('deleted_at')
+        ->exists();
+ 
+    if ($existing) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Vous avez déjà une réclamation active pour ce module et ce type d\'évaluation.',
+        ], 409);
+    }
+ 
+    // ── Référence unique ───────────────────────────────────────────
+    $year      = date('Y');
+    $count     = DB::table('reclamations')->whereYear('created_at', $year)->count() + 1;
+    $reference = 'RECL-' . $year . '-' . str_pad($count, 6, '0', STR_PAD_LEFT);
+ 
+    // ── Transaction ────────────────────────────────────────────────
+    DB::beginTransaction();
+    try {
+        // 1. Supprimer l'ancienne réclamation resolved/rejected si elle existe
+        // (pour contourner la contrainte unique uq_reclam_no_dup)
+        DB::table('reclamations')
+            ->where('student_id',   $student->id)
+            ->where('module_id',    $request->module_id)
+            ->where('semestre_id',  $request->semestre_id)
+            ->where('type',         $dbType)
+            ->where('academic_year', $student->academic_year ?? ($year . '-' . ($year + 1)))
+            ->whereIn('status', ['resolved', 'rejected'])
+            ->update(['deleted_at' => Carbon::now()]);
+ 
+        // 2. Insérer la réclamation
+        $reclamationId = DB::table('reclamations')->insertGetId([
+            'reference_number' => $reference,
+            'student_id'       => $student->id,
+            'module_id'        => $request->module_id,
+            'semestre_id'      => $request->semestre_id,
+            'academic_year'    => $student->academic_year ?? ($year . '-' . ($year + 1)),
+            'type'             => $dbType,
+            'note_actuelle'    => $request->note_actuelle,
+            'note_reclamee'    => in_array($dbType, ['controle', 'cc'])
+                                    ? $request->note_reclamee
+                                    : null,
+            'justification'    => $request->justification,
+            'status'           => 'submitted',
+            'is_escalated'     => 0,
+            'created_at'       => Carbon::now(),
+            'updated_at'       => Carbon::now(),
+        ]);
+ 
+        // 3. Historique initial
+        DB::table('reclamation_history')->insert([
+            'reclamation_id' => $reclamationId,
+            'old_status'     => null,
+            'new_status'     => 'submitted',
+            'comment'        => "Réclamation soumise par l'étudiant.",
+            'changed_by'     => Auth::id(),
+            'ip_address'     => $request->ip(),
+            'created_at'     => Carbon::now(),
+            'updated_at'     => Carbon::now(),
+        ]);
+ 
+        // 4. Pièce jointe optionnelle
+        if ($request->hasFile('document') && $request->file('document')->isValid()) {
+            $file       = $request->file('document');
+            $storedName = uniqid() . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $filePath   = $file->storeAs('reclamations/attachments', $storedName, 'public');
+ 
+            DB::table('reclamation_attachments')->insert([
+                'reclamation_id' => $reclamationId,
+                'uploaded_by'    => Auth::id(),
+                'original_name'  => $file->getClientOriginalName(),
+                'stored_name'    => $storedName,
+                'file_path'      => $filePath,
+                'mime_type'      => $file->getMimeType(),
+                'file_size'      => $file->getSize(),
+                'disk'           => 'public',
+                'is_scanned'     => 0,
+                'is_safe'        => 1,
+                'created_at'     => Carbon::now(),
+            ]);
+        }
+ 
+        DB::commit();
+ 
+        return response()->json([
+            'success' => true,
+            'message' => 'Réclamation soumise avec succès.',
+            'data'    => [
+                'id'               => $reclamationId,
+                'reference_number' => $reference,
+                'reference'        => $reference,
+            ],
+        ], 201);
+ 
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        Log::error('[ReclamationStore] Erreur: ' . $e->getMessage(), [
+            'student_id'  => $student->id,
+            'module_id'   => $request->module_id,
+            'semestre_id' => $request->semestre_id,
+            'type'        => $dbType,
+        ]);
+        return response()->json([
+            'success' => false,
+            'message' => app()->isLocal()
+                ? 'Erreur : ' . $e->getMessage()
+                : 'Une erreur est survenue lors de la soumission.',
+        ], 500);
+    }
+}
+ 
     // ══════════════════════════════════════════════════════════════════
     // PUT /api/v1/student/reclamations/{id}
     // ══════════════════════════════════════════════════════════════════
@@ -640,3 +643,4 @@ private function loadAttachments(int $reclamationId): array
         ]);
     }
 }
+               

@@ -359,25 +359,17 @@
               </div>
 
               <!-- ── Pièces jointes ── -->
-              <div v-if="selected.attachments?.length" class="detail-section mb-4">
-                <div class="detail-section-header">
-                  <v-icon size="16" color="#0F2D5E">mdi-paperclip</v-icon>
-                  <span>Pièces jointes ({{ selected.attachments.length }})</span>
-                </div>
-                <div class="d-flex flex-wrap gap-2 mt-3">
-                  <a
-                    v-for="att in selected.attachments"
-                    :key="att.id"
-                    :href="att.url"
-                    target="_blank"
-                    class="attachment-chip"
-                  >
-                    <v-icon size="13">mdi-file-outline</v-icon>
-                    {{ att.name ?? att.original_name }}
-                  </a>
-                </div>
-              </div>
+              <!-- ── Upload PDF Admin ── -->
 
+<!-- ── Analyse IA ── -->
+<!-- ── Analyse IA ── -->
+<AiAnalysisPanel
+  v-if="selected?.id && !loadingDetail"
+  :key="selected.id"
+  :reclamation-id="selected.id"
+  :attachments="selected.attachments ?? []"
+  class="mb-4"
+/>
               <!-- ── Réponse & traitement ── -->
               <div class="detail-section mb-4">
                 <div class="detail-section-header">
@@ -560,6 +552,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import api from '@/api/axios'
+import AiAnalysisPanel from '@/components/admin/AiAnalysisPanel.vue'
 
 // ─── État principal ──────────────────────────────────────────────────────────
 const loading        = ref(true)
@@ -579,6 +572,7 @@ const selected     = ref(null)
 const newStatus    = ref('')
 const adminComment = ref('')
 const updating     = ref(false)
+
 
 // ─── Dialog escalade ─────────────────────────────────────────────────────────
 const escalateDialog = ref(false)
@@ -774,6 +768,10 @@ async function updateStatus() {
     updating.value = false
   }
 }
+
+
+
+
 
 // ─── Escalader ────────────────────────────────────────────────────────────────
 async function doEscalate() {

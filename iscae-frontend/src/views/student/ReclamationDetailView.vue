@@ -192,8 +192,7 @@
                 <v-divider class="my-3" />
                 <div class="module-stats">
                   <div class="module-stat">
-                    <span class="stat-label">Année universitaire</span>
-                    <span class="stat-value">{{ rec.semestre?.academic_year ?? '—' }}</span>
+              
                   </div>
                 </div>
               </v-card-text>
