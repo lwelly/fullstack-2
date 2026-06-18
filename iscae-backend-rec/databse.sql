@@ -9,7 +9,7 @@
 -- ============================================================
 -- 0. CRÉATION BASE DE DONNÉES
 -- ============================================================
-DROP DATABASE IF EXISTS iscae_reclamations;
+ 
 
 CREATE DATABASE iscae_reclamations
     CHARACTER SET utf8mb4
@@ -677,7 +677,13 @@ CREATE TABLE reclamation_attachments (
   COMMENT='Pièces jointes réclamations';
 
 
+-- ╔══════════════════════════════════════════════════════════════════╗
+-- ║   GROUPE 6 — DOCUMENTS & NOTIFICATIONS                          ║
+-- ╚══════════════════════════════════════════════════════════════════╝
 
+-- ------------------------------------------------------------
+-- TABLE: documents
+-- ------------------------------------------------------------
 CREATE TABLE documents (
     id            BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
     student_id    BIGINT UNSIGNED  NOT NULL,
@@ -818,12 +824,19 @@ INSERT INTO niveaux (code, label, order_index) VALUES
     ('L3', 'Licence 3ème Année', 3);
 
 
+-- ============================================================
+-- 2. DEPARTMENTS
+-- ============================================================
 INSERT INTO departments (name, code, head_name, head_email, is_active) VALUES
     ('Finance et Comptabilité',    'FIN',  'Dr. Ahmed Ould Mohamed',  'ahmed@iscae.mr',  1),
     ('Marketing et Commerce',      'MKT',  'Dr. Fatima Mint Salem',   'fatima@iscae.mr', 1),
     ('Management et Organisation', 'MGT',  'Dr. Mohamed Ould Brahim', 'med@iscae.mr',    1),
     ('Informatique de Gestion',    'INFO', 'Dr. Aissa Ould Cheikh',   'aissa@iscae.mr',  1);
 
+
+-- ============================================================
+-- 3. FILIERES (IDs dynamiques)
+-- ============================================================
 INSERT INTO filieres (department_id, name, code, is_active)
 SELECT id, 'Licence Finance',        'LIC-FIN',  1 FROM departments WHERE code='FIN'  UNION ALL
 SELECT id, 'Licence Comptabilité',   'LIC-CPT',  1 FROM departments WHERE code='FIN'  UNION ALL
@@ -832,6 +845,10 @@ SELECT id, 'Licence Commerce',       'LIC-COM',  1 FROM departments WHERE code='
 SELECT id, 'Licence Management',     'LIC-MGT',  1 FROM departments WHERE code='MGT'  UNION ALL
 SELECT id, 'Licence Informatique',   'LIC-INFO', 1 FROM departments WHERE code='INFO';
 
+
+-- ============================================================
+-- 4. SEMESTRES (IDs dynamiques — règle L1→S1,S2 | L2→S3,S4 | L3→S5,S6)
+-- ============================================================
 INSERT INTO semestres (niveau_id, code, label, order_index, is_open, academic_year)
 SELECT id,'S1','Semestre 1',1,1,'2024-2025' FROM niveaux WHERE code='L1' UNION ALL
 SELECT id,'S2','Semestre 2',2,1,'2024-2025' FROM niveaux WHERE code='L1' UNION ALL
@@ -840,6 +857,14 @@ SELECT id,'S4','Semestre 4',4,1,'2024-2025' FROM niveaux WHERE code='L2' UNION A
 SELECT id,'S5','Semestre 5',5,1,'2024-2025' FROM niveaux WHERE code='L3' UNION ALL
 SELECT id,'S6','Semestre 6',6,1,'2024-2025' FROM niveaux WHERE code='L3';
 
+
+-- ============================================================
+-- 5. MODULES — TOUTES FILIÈRES — TOUS SEMESTRES
+-- ============================================================
+
+-- ─────────────────────────────────────────────────────────────
+-- LIC-FIN — S1 (L1)
+-- ─────────────────────────────────────────────────────────────
 INSERT INTO modules (filiere_id, semestre_id, code, name, coefficient, credits)
 SELECT f.id, s.id, m.code, m.name, m.coef, m.cred
 FROM filieres f
@@ -1492,6 +1517,13 @@ JOIN semestres s ON s.id = m.semestre_id
 GROUP BY f.code, s.code
 ORDER BY f.code, s.order_index;
 
+
+
+
+
+
+
+
 TRUNCATE TABLE students_preloaded;
 
 SELECT id, code, name FROM filieres;
@@ -1500,18 +1532,193 @@ SELECT id, code FROM niveaux;
 DESCRIBE students_preloaded;
 
 
+
 INSERT INTO students_preloaded
 (matricule, nni, nom, prenom, email, filiere_code, niveau_code, academic_year, is_registered, import_batch)
 VALUES
 (
- 'I205099',
- '1010101012',
- 'bhn',
- 'El Ghassem',
- 'ahmedabdellahi935@gmail.com',
+ 'I20426',
+ '1010111013',
+ 'Saleck',
+ 'El welli',
+ 'elwelij100@gmail.com',
  'LIC-INFO',
- 'L2',
+ 'L4',
  '2025-2026',
  0,
  'BATCH-2024-001'
+);
+
+
+CREATE TABLE IF NOT EXISTS `personal_access_tokens` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tokenable_type` varchar(255) NOT NULL,
+  `tokenable_id` bigint unsigned NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `token` varchar(64) NOT NULL,
+  `abilities` text,
+  `last_used_at` timestamp NULL DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
+  KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 1. Ajouter deleted_at à admins
+ALTER TABLE `admins` ADD COLUMN `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+
+-- 2. Vérifier les autres tables qui pourraient manquer deleted_at
+SHOW COLUMNS FROM `admins`;
+SHOW COLUMNS FROM `students`;
+SHOW COLUMNS FROM `modules`;
+SHOW COLUMNS FROM `semestres`;
+
+ALTER TABLE `students` ADD COLUMN `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+ALTER TABLE `admins`   ADD COLUMN `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+
+
+-- Ajouter deleted_at à toutes les tables qui en ont besoin
+ALTER TABLE `students`      ADD COLUMN IF NOT EXISTS `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+ALTER TABLE `admins`        ADD COLUMN IF NOT EXISTS `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+ALTER TABLE `modules`       ADD COLUMN IF NOT EXISTS `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+ALTER TABLE `semestres`     ADD COLUMN IF NOT EXISTS `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+ALTER TABLE `reclamations`  ADD COLUMN IF NOT EXISTS `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+ALTER TABLE `documents`     ADD COLUMN IF NOT EXISTS `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+ALTER TABLE `notifications` ADD COLUMN IF NOT EXISTS `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+ALTER TABLE `users`         ADD COLUMN IF NOT EXISTS `deleted_at` TIMESTAMP NULL DEFAULT NULL;
+
+CREATE TABLE IF NOT EXISTS `cache` (
+  `key`        varchar(255) NOT NULL,
+  `value`      mediumtext   NOT NULL,
+  `expiration` int(11)      NOT NULL,
+  PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `cache_locks` (
+  `key`        varchar(255) NOT NULL,
+  `owner`      varchar(255) NOT NULL,
+  `expiration` int(11)      NOT NULL,
+  PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `iscae_reclamations`.`students` 
+MODIFY COLUMN `user_id` BIGINT(20) UNSIGNED NULL;
+
+CREATE TABLE `password_reset_tokens` (
+  `email` varchar(255) NOT NULL,
+  `token` varchar(255) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `trusted_devices` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `device_fingerprint` varchar(64) NOT NULL,
+  `device_name` varchar(100) NULL,
+  `ip_address` varchar(45) NULL,
+  `user_agent` text NULL,
+  `last_used_at` timestamp NULL DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `trusted_devices_user_id_foreign` (`user_id`),
+  CONSTRAINT `trusted_devices_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `students` ADD COLUMN `deleted_at` timestamp NULL DEFAULT NULL;
+
+ALTER TABLE `reclamations` ADD COLUMN `deleted_at` timestamp NULL DEFAULT NULL;
+
+ALTER TABLE `reclamations` ADD COLUMN `is_escalated` tinyint(1) NOT NULL DEFAULT 0;
+
+ALTER TABLE `reclamation_history` ADD COLUMN `updated_at` timestamp NULL DEFAULT NULL;
+
+ALTER TABLE `admins` 
+  ADD COLUMN `first_name` varchar(100) NULL AFTER `user_id`,
+  ADD COLUMN `last_name` varchar(100) NULL AFTER `first_name`;
+  
+  CREATE TABLE `module_result_pdfs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `module_id` bigint unsigned NOT NULL,
+  `semestre_id` bigint unsigned NOT NULL,
+  `academic_year` varchar(9) NOT NULL,
+  `type` enum('controle','examen','rattrapage') NOT NULL,
+  `file_path` varchar(255) NOT NULL,
+  `file_name` varchar(255) NULL,
+  `disk` varchar(20) NOT NULL DEFAULT 'public',
+  `uploaded_by` bigint unsigned NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `module_result_pdfs_module_id_foreign` (`module_id`),
+  KEY `module_result_pdfs_semestre_id_foreign` (`semestre_id`),
+  CONSTRAINT `module_result_pdfs_module_id_foreign` FOREIGN KEY (`module_id`) REFERENCES `modules` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `module_result_pdfs_semestre_id_foreign` FOREIGN KEY (`semestre_id`) REFERENCES `semestres` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+  
+
+ALTER TABLE `semestres`
+  ADD COLUMN `is_exam_open` tinyint(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `is_rattrapage_open` tinyint(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `exam_open_at` timestamp NULL DEFAULT NULL,
+  ADD COLUMN `exam_close_at` timestamp NULL DEFAULT NULL,
+  ADD COLUMN `rattrapage_open_at` timestamp NULL DEFAULT NULL,
+  ADD COLUMN `rattrapage_close_at` timestamp NULL DEFAULT NULL;
+  
+  ALTER TABLE `module_result_pdfs` ADD COLUMN `original_name` varchar(255) NULL AFTER `file_path`;
+  
+ALTER TABLE `reclamations` ADD COLUMN `resolved_at` timestamp NULL DEFAULT NULL;
+  
+ALTER TABLE `notifications` ADD COLUMN `updated_at` timestamp NULL DEFAULT NULL;
+ALTER TABLE `notifications` ADD COLUMN `deleted_at` timestamp NULL DEFAULT NULL;
+  
+  CREATE TABLE `reclamation_ai_analyses` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `reclamation_id` bigint unsigned NOT NULL,
+  `attachment_id` bigint unsigned NULL,
+  `pdf_extracted_text` longtext NULL,
+  `pdf_parsed_successfully` tinyint(1) NOT NULL DEFAULT 0,
+  `pdf_parse_error` text NULL,
+  `prompt_sent` longtext NULL,
+  `raw_response` longtext NULL,
+  `decision` enum('founded','unfounded','uncertain') NULL,
+  `confidence_score` decimal(4,3) NULL,
+  `explanation` text NULL,
+  `recommendation` text NULL,
+  `note_from_pdf` decimal(5,2) NULL,
+  `note_from_db` decimal(5,2) NULL,
+  `note_claimed` decimal(5,2) NULL,
+  `note_discrepancy_found` tinyint(1) NOT NULL DEFAULT 0,
+  `discrepancy_details` text NULL,
+  `openai_model` varchar(100) NULL,
+  `prompt_tokens` int NULL,
+  `completion_tokens` int NULL,
+  `total_tokens` int NULL,
+  `processing_time_ms` int NULL,
+  `analyzed_by` bigint unsigned NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `reclamation_ai_analyses_reclamation_id_unique` (`reclamation_id`),
+  CONSTRAINT `reclamation_ai_analyses_reclamation_id_foreign` FOREIGN KEY (`reclamation_id`) REFERENCES `reclamations` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SHOW COLUMNS FROM `reclamations`;
+
+INSERT INTO students_preloaded (
+    matricule, nni, nom, prenom, email, 
+    filiere_id, 
+    niveau_id, 
+    academic_year, is_registered, import_batch
+) VALUES (
+    'I20429', '4514340224', 'Lemin', 'Mohamed ', 'bbmdlmn@gmail.com', 
+    (SELECT id FROM filieres WHERE code = 'LIC-INFO' LIMIT 1), 
+    (SELECT id FROM niveaux WHERE code = 'L1' LIMIT 2), 
+    '2025-2026', 0, 'BATCH-2024-001'
 );

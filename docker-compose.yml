@@ -1,0 +1,26 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: iscae_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: iscae_db
+    ports:
+      - "3307:3306"
+
+  backend:
+    build:
+      context: ./iscae-backend-rec
+    container_name: iscae_backend
+    ports:
+      - "10000:10000"
+    depends_on:
+      - mysql
+
+  frontend:
+    build:
+      context: ./iscae-frontend
+    container_name: iscae_frontend
+    ports:
+      - "5173:5173"

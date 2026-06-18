@@ -572,6 +572,12 @@ function startCooldown() {
 .otp-input :deep(.v-otp-input__field) {
   border-radius: 12px !important;
   background: #f8faf9 !important;
+  color: #2c3e50 !important;
+}
+
+.otp-input :deep(input) {
+  color: #2c3e50 !important;
+  caret-color: #0b8243 !important;
 }
 
 /* Badge cooldown */

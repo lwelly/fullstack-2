@@ -193,6 +193,7 @@ PROMPT;
     $client = new \GuzzleHttp\Client();
 
     $response = $client->post('https://api.groq.com/openai/v1/chat/completions', [
+        'verify' => false,
         'headers' => [
             'Authorization' => 'Bearer ' . config('services.groq.api_key'),
             'Content-Type'  => 'application/json',

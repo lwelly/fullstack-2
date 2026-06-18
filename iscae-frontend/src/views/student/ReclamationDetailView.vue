@@ -478,7 +478,11 @@ const progressSteps = computed(() => {
     { key:'received',  label:'Reçu' },
     { key:'in_review', label:'En cours' },
     { key:'resolved',  label: current === 'rejected' ? 'Rejeté' : 'Résolu' },
-  ].map((step, i) => ({ ...step, done: i < idx, active: i === idx }))
+  ].map((step, i) => ({
+  ...step,
+  done:   i < idx || (current === 'resolved' && i === idx),
+  active: i === idx && current !== 'resolved',
+}))
 })
 
 const delayLabel = computed(() => {

@@ -34,7 +34,7 @@ class AuthController extends Controller
 
         // 1️⃣ Chercher dans students
         $student = Student::whereRaw(
-            'UPPER(matricule) = ? AND LOWER(email) = ? AND deleted_at IS NULL',
+            'UPPER(matricule) = ? AND LOWER(email) = ?',
             [$matricule, $email]
         )->first();
 
