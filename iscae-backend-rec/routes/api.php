@@ -368,3 +368,12 @@ Route::get('modules', function (\Illuminate\Http\Request $request) {
     });
 
 });
+
+Route::get('/test-db', function () {
+    try {
+        DB::connection()->getPdo();
+        return 'DB Connected';
+    } catch (\Exception $e) {
+        return $e->getMessage();
+    }
+});
